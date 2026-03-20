@@ -2,6 +2,26 @@
 #include "WebServer.h"
 #include "SD_MMC.h"
 #include <FS.h>
+#include "esp_camera.h"
+
+// Camera Pins (AI-THINKER)
+#define PWDN_GPIO_NUM  32
+#define RESET_GPIO_NUM -1
+#define XCLK_GPIO_NUM  0
+#define SIOD_GPIO_NUM  26
+#define SIOC_GPIO_NUM  27
+
+#define Y9_GPIO_NUM    35
+#define Y8_GPIO_NUM    34
+#define Y7_GPIO_NUM    39
+#define Y6_GPIO_NUM    36
+#define Y5_GPIO_NUM    21
+#define Y4_GPIO_NUM    19
+#define Y3_GPIO_NUM    18
+#define Y2_GPIO_NUM    5
+#define VSYNC_GPIO_NUM 25
+#define HREF_GPIO_NUM  23
+#define PCLK_GPIO_NUM  22
 
 /*
  * CONFIGURATION
@@ -107,7 +127,14 @@ void handleData() {
             --success: #22c55e;
             --warning: #f59e0b;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
         body {
             background-color: var(--bg-color);
             color: var(--text-primary);
@@ -115,28 +142,166 @@ void handleData() {
             padding: 20px;
             background-image: radial-gradient(circle at top right, #1e293b, #0f172a);
         }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding: 0 10px; }
-        .header h1 { font-size: 1.8rem; font-weight: 700; background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .status-badge { background: var(--card-bg); padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; border: 1px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; gap: 8px; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 10px var(--success); }
-        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; max-width: 1400px; margin: 0 auto; }
-        .card { background: var(--card-bg); backdrop-filter: blur(12px); border-radius: 20px; padding: 24px; border: 1px solid rgba(255, 255, 255, 0.05); transition: transform 0.3s ease, box-shadow 0.3s ease; position: relative; overflow: hidden; }
-        .card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); }
-        .card-header { display: flex; justify-content: space-between; margin-bottom: 15px; }
-        .card-title { color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-        .card-value { font-size: 2.2rem; font-weight: 700; margin-bottom: 5px; }
-        .card-unit { font-size: 1rem; color: var(--text-secondary); }
-        .radar-container { grid-column: span 2; display: flex; flex-direction: column; align-items: center; }
-        @media (max-width: 900px) { .radar-container { grid-column: span 1; } }
-        canvas#radarCanvas { max-width: 100%; height: auto; }
-        .flame-card.active { border-color: var(--danger); animation: pulse-red 2s infinite; }
-        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
-        .chart-container { height: 120px; width: 100%; margin-top: 10px; }
-        .gps-row { display: flex; justify-content: space-between; margin-top: 5px; }
-        .accel-box { display: flex; justify-content: space-around; margin-top: 20px; }
-        .axis-val { text-align: center; }
-        .axis-label { font-size: 0.8rem; color: var(--text-secondary); }
-        .axis-number { font-size: 1.2rem; font-weight: 600; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 0 10px;
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badge {
+            background: var(--card-bg);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            max-width: 1400px; margin: 0 auto;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .card-title {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .card-value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .card-unit {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .card-footer {
+            margin-top: 10px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Radar Card Specific */
+        .radar-container {
+            grid-column: span 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        @media (max-width: 900px) {
+            .radar-container {
+                grid-column: span 1;
+            }
+        }
+
+        canvas#radarCanvas {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* Flame Card Specific */
+        .flame-card.active {
+            border-color: var(--danger);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .chart-container {
+            height: 120px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .gps-info {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .gps-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .accel-box {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+
+        .axis-val {
+            text-align: center;
+        }
+
+        .axis-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .axis-number {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
     </style>
 </head>
 <body>
@@ -147,112 +312,302 @@ void handleData() {
             <span id="statusText">LIVE DATA</span>
         </div>
     </div>
+
     <div class="dashboard-grid">
+        <!-- Temperature -->
         <div class="card">
-            <div class="card-header"><span class="card-title">Temperature</span><span class="card-unit">°C</span></div>
+            <div class="card-header">
+                <span class="card-title">Temperature</span>
+                <span class="card-unit">°C</span>
+            </div>
             <div class="card-value" id="tempVal">--.-</div>
-            <div class="chart-container"><canvas id="tempChart"></canvas></div>
+            <div class="chart-container">
+                <canvas id="tempChart"></canvas>
+            </div>
         </div>
+
+        <!-- Humidity -->
         <div class="card">
-            <div class="card-header"><span class="card-title">Humidity</span><span class="card-unit">%</span></div>
+            <div class="card-header">
+                <span class="card-title">Humidity</span>
+                <span class="card-unit">%</span>
+            </div>
             <div class="card-value" id="humVal">--.-</div>
-            <div class="chart-container"><canvas id="humChart"></canvas></div>
+            <div class="chart-container">
+                <canvas id="humChart"></canvas>
+            </div>
         </div>
+
+        <!-- Radar / Distance -->
         <div class="card radar-container">
-            <div class="card-header"><span class="card-title">Ultrasonic Radar</span><span id="distVal">-- cm</span></div>
+            <div class="card-header">
+                <span class="card-title">Ultrasonic Radar</span>
+                <span id="distVal">Distance: -- cm</span>
+            </div>
             <canvas id="radarCanvas" width="500" height="280"></canvas>
         </div>
+
+        <!-- Live Camera -->
+        <div class="card" style="grid-column: span 2;">
+            <div class="card-header">
+                <span class="card-title">Live Camera Feed</span>
+                <span class="card-unit" id="camStatus">Refreshing every 10s</span>
+            </div>
+            <div style="width: 100%; display: flex; justify-content: center; align-items: center; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3;">
+                <img id="cameraFeed" src="" alt="Camera Stream" style="width: 100%; height: 100%; object-fit: contain;">
+            </div>
+        </div>
+
+        <!-- Pressure -->
         <div class="card">
-            <div class="card-header"><span class="card-title">Pressure</span><span class="card-unit">hPa</span></div>
+            <div class="card-header">
+                <span class="card-title">Pressure</span>
+                <span class="card-unit">hPa</span>
+            </div>
             <div class="card-value" id="pressVal">----</div>
             <div class="card-footer" id="altVal">Altitude: -- m</div>
         </div>
+
+        <!-- Flame Sensor -->
         <div class="card flame-card" id="flameCard">
-            <div class="card-header"><span class="card-title">Flame Status</span></div>
+            <div class="card-header">
+                <span class="card-title">Flame Status</span>
+            </div>
             <div class="card-value" id="flameStatus">SAFE</div>
+            <div class="card-footer">Photodiode Monitoring</div>
         </div>
+
+        <!-- MPU6050 -->
         <div class="card">
-            <div class="card-header"><span class="card-title">Motion Tracking</span></div>
+            <div class="card-header">
+                <span class="card-title">Motion Tracking</span>
+                <span class="card-unit">Accel</span>
+            </div>
             <div class="accel-box">
-                <div class="axis-val"><div class="axis-label">X</div><div class="axis-number" id="axVal">0</div></div>
-                <div class="axis-val"><div class="axis-label">Y</div><div class="axis-number" id="ayVal">0</div></div>
-                <div class="axis-val"><div class="axis-label">Z</div><div class="axis-number" id="azVal">0</div></div>
+                <div class="axis-val">
+                    <div class="axis-label">X</div>
+                    <div class="axis-number" id="axVal">0</div>
+                </div>
+                <div class="axis-val">
+                    <div class="axis-label">Y</div>
+                    <div class="axis-number" id="ayVal">0</div>
+                </div>
+                <div class="axis-val">
+                    <div class="axis-label">Z</div>
+                    <div class="axis-number" id="azVal">0</div>
+                </div>
             </div>
         </div>
+
+        <!-- GPS -->
         <div class="card">
-            <div class="card-header"><span class="card-title">GPS Location</span></div>
-            <div class="gps-row"><span>Lat:</span><span id="latVal">0.000000</span></div>
-            <div class="gps-row"><span>Lng:</span><span id="lngVal">0.000000</span></div>
+            <div class="card-header">
+                <span class="card-title">Global Positioning</span>
+                <span class="card-unit">GPS</span>
+            </div>
+            <div class="gps-info">
+                <div class="gps-row">
+                    <span>Latitude:</span>
+                    <span id="latVal" style="font-weight:600">0.000000</span>
+                </div>
+                <div class="gps-row">
+                    <span>Longitude:</span>
+                    <span id="lngVal" style="font-weight:600">0.000000</span>
+                </div>
+            </div>
         </div>
     </div>
+
     <script>
-        const MAX_POINTS = 20;
+        // Configuration
+        const MAX_DATA_POINTS = 20;
+        const fetchInterval = 1000; // 1 second
+
+        // Chart Instances
         const charts = {};
-        function initChart(id, color) {
-            return new Chart(document.getElementById(id), {
+
+        function initChart(id, label, color) {
+            const ctx = document.getElementById(id).getContext('2d');
+            return new Chart(ctx, {
                 type: 'line',
-                data: { labels: Array(MAX_POINTS).fill(''), datasets: [{ data: Array(MAX_POINTS).fill(null), borderColor: color, backgroundColor: color + '22', borderWidth: 2, tension: 0.4, pointRadius: 0, fill: true }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } } } }
+                data: {
+                    labels: Array(MAX_DATA_POINTS).fill(''),
+                    datasets: [{
+                        label: label,
+                        data: Array(MAX_DATA_POINTS).fill(null),
+                        borderColor: color,
+                        backgroundColor: color + '22',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#94a3b8', font: { size: 10 } }
+                        }
+                    }
+                }
             });
         }
-        charts.temp = initChart('tempChart', '#38bdf8');
-        charts.hum = initChart('humChart', '#818cf8');
+
+        charts.temp = initChart('tempChart', 'Temp', '#38bdf8');
+        charts.hum = initChart('humChart', 'Hum', '#818cf8');
+
+        function updateChart(chart, value) {
+            chart.data.datasets[0].data.push(value);
+            chart.data.datasets[0].data.shift();
+            chart.update('none');
+        }
+
+        // Radar Canvas Logic
         const radarCanvas = document.getElementById('radarCanvas');
         const radarCtx = radarCanvas.getContext('2d');
         let radarPoints = [];
+
         function drawRadar(angle, distance) {
-            const w = radarCanvas.width, h = radarCanvas.height, cx = w/2, cy = h-20, r = Math.min(cx, cy)-20;
-            radarPoints.push({ angle, distance }); if (radarPoints.length > 50) radarPoints.shift();
-            radarCtx.clearRect(0, 0, w, h);
+            const width = radarCanvas.width;
+            const height = radarCanvas.height;
+            const centerX = width / 2;
+            const centerY = height - 20;
+            const radius = Math.min(centerX, centerY) - 20;
+
+            // Store point
+            radarPoints.push({ angle, distance });
+            if (radarPoints.length > 50) radarPoints.shift();
+
+            // Clear
+            radarCtx.clearRect(0, 0, width, height);
+
+            // Draw Background Grid (Semi-circle)
             radarCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            [1, 0.66, 0.33].forEach(m => { radarCtx.beginPath(); radarCtx.arc(cx, cy, r*m, Math.PI, 0); radarCtx.stroke(); });
+            radarCtx.beginPath();
+            radarCtx.arc(centerX, centerY, radius, Math.PI, 0);
+            radarCtx.stroke();
+            radarCtx.beginPath();
+            radarCtx.arc(centerX, centerY, radius * 0.66, Math.PI, 0);
+            radarCtx.stroke();
+            radarCtx.beginPath();
+            radarCtx.arc(centerX, centerY, radius * 0.33, Math.PI, 0);
+            radarCtx.stroke();
+
+            // Draw Lines
             for(let a=0; a<=180; a+=30) {
-                let rad = (a-180)*Math.PI/180;
-                radarCtx.beginPath(); radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx+Math.cos(rad)*r, cy+Math.sin(rad)*r); radarCtx.stroke();
+                let rad = (a - 180) * Math.PI / 180;
+                radarCtx.beginPath();
+                radarCtx.moveTo(centerX, centerY);
+                radarCtx.lineTo(centerX + Math.cos(rad) * radius, centerY + Math.sin(rad) * radius);
+                radarCtx.stroke();
             }
-            let activeRad = (angle-180)*Math.PI/180;
-            radarCtx.strokeStyle = '#38bdf8'; radarCtx.lineWidth = 3;
-            radarCtx.beginPath(); radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx+Math.cos(activeRad)*r, cy+Math.sin(activeRad)*r); radarCtx.stroke();
-            radarCtx.lineWidth = 1; radarCtx.fillStyle = '#ef4444';
+
+            // Draw Active Scan Line
+            let activeRad = (angle - 180) * Math.PI / 180;
+            radarCtx.strokeStyle = 'var(--accent-primary)';
+            radarCtx.lineWidth = 3;
+            radarCtx.beginPath();
+            radarCtx.moveTo(centerX, centerY);
+            radarCtx.lineTo(centerX + Math.cos(activeRad) * radius, centerY + Math.sin(activeRad) * radius);
+            radarCtx.stroke();
+            radarCtx.lineWidth = 1;
+
+            // Draw Points
+            radarCtx.fillStyle = '#ef4444';
             radarPoints.forEach(p => {
-                let pRad = (p.angle-180)*Math.PI/180, pDist = Math.min((p.distance/200)*r, r);
-                radarCtx.beginPath(); radarCtx.arc(cx+Math.cos(pRad)*pDist, cy+Math.sin(pRad)*pDist, 3, 0, Math.PI*2); radarCtx.fill();
+                let pRad = (p.angle - 180) * Math.PI / 180;
+                let pDist = (p.distance / 200) * radius; // Max scale 200cm
+                if (pDist > radius) pDist = radius;
+                
+                radarCtx.beginPath();
+                radarCtx.arc(centerX + Math.cos(pRad) * pDist, centerY + Math.sin(pRad) * pDist, 3, 0, Math.PI*2);
+                radarCtx.fill();
             });
         }
-        async function update() {
+
+        async function fetchData() {
             try {
-                const res = await fetch('/json'); const d = await res.json();
-                if (d.valid !== false) {
-                    document.getElementById('tempVal').innerText = parseFloat(d.temp).toFixed(1);
-                    document.getElementById('humVal').innerText = parseFloat(d.hum).toFixed(1);
-                    document.getElementById('pressVal').innerText = parseFloat(d.pressure).toFixed(0);
-                    document.getElementById('altVal').innerText = `Altitude: ${parseFloat(d.altitude).toFixed(1)} m`;
-                    document.getElementById('distVal').innerText = `${d.distance} cm @ ${d.angle}°`;
-                    document.getElementById('axVal').innerText = d.accel.x;
-                    document.getElementById('ayVal').innerText = d.accel.y;
-                    document.getElementById('azVal').innerText = d.accel.z;
-                    document.getElementById('latVal').innerText = parseFloat(d.gps.lat).toFixed(6);
-                    document.getElementById('lngVal').innerText = parseFloat(d.gps.lng).toFixed(6);
+                const response = await fetch('/json');
+                const data = await response.json();
+                
+                // Log raw data for debugging
+                if(data.raw) console.log("[DEBUG] Raw Data:", data.raw);
+
+                if (data.valid !== false) {
+                    // Convert potential strings to numbers safely
+                    const temp = parseFloat(data.temp);
+                    const hum = parseFloat(data.hum);
+                    const press = parseFloat(data.pressure);
+                    const alt = parseFloat(data.altitude);
+                    const lat = parseFloat(data.gps.lat);
+                    const lng = parseFloat(data.gps.lng);
+                    const dist = parseInt(data.distance);
+                    const angle = parseInt(data.angle);
+
+                    // Update Values
+                    document.getElementById('tempVal').innerText = isNaN(temp) ? "--.-" : temp.toFixed(1);
+                    document.getElementById('humVal').innerText = isNaN(hum) ? "--.-" : hum.toFixed(1);
+                    document.getElementById('pressVal').innerText = isNaN(press) ? "----" : press.toFixed(0);
+                    document.getElementById('altVal').innerText = `Altitude: ${isNaN(alt) ? "--.-" : alt.toFixed(1)} m`;
+                    document.getElementById('distVal').innerText = `Distance: ${dist} cm | Angle: ${angle}°`;
                     
-                    if (!isNaN(parseFloat(d.temp))) charts.temp.data.datasets[0].data.push(parseFloat(d.temp));
-                    charts.temp.data.datasets[0].data.shift(); charts.temp.update('none');
-                    if (!isNaN(parseFloat(d.hum))) charts.hum.data.datasets[0].data.push(parseFloat(d.hum));
-                    charts.hum.data.datasets[0].data.shift(); charts.hum.update('none');
-                    
-                    drawRadar(d.angle, d.distance);
-                    const fC = document.getElementById('flameCard'), fS = document.getElementById('flameStatus');
-                    if (d.flame == 0) { fC.classList.add('active'); fS.innerText = '!!! FLAME !!!'; fS.style.color = '#ef4444'; }
-                    else { fC.classList.remove('active'); fS.innerText = 'SAFE'; fS.style.color = '#22c55e'; }
-                    document.getElementById('statusDot').style.background = '#22c55e';
-                    
-                    // Show raw data for debugging
-                    if(d.raw) {
-                        console.log("Raw Data:", d.raw);
+                    document.getElementById('axVal').innerText = data.accel.x;
+                    document.getElementById('ayVal').innerText = data.accel.y;
+                    document.getElementById('azVal').innerText = data.accel.z;
+
+                    document.getElementById('latVal').innerText = isNaN(lat) ? "0.000000" : lat.toFixed(6);
+                    document.getElementById('lngVal').innerText = isNaN(lng) ? "0.000000" : lng.toFixed(6);
+
+                    // Update Charts
+                    if(!isNaN(temp)) updateChart(charts.temp, temp);
+                    if(!isNaN(hum)) updateChart(charts.hum, hum);
+
+                    // Update Radar
+                    drawRadar(angle, dist);
+
+                    // Flame Status
+                    const flameCard = document.getElementById('flameCard');
+                    const flameStatus = document.getElementById('flameStatus');
+                    if (data.flame == 0) { 
+                        flameCard.classList.add('active');
+                        flameStatus.innerText = '!!! FLAME !!!';
+                        flameStatus.style.color = 'var(--danger)';
+                    } else {
+                        flameCard.classList.remove('active');
+                        flameStatus.innerText = 'SAFE';
+                        flameStatus.style.color = 'var(--success)';
                     }
+
+                    // Reset status
+                    document.getElementById('statusDot').style.background = 'var(--success)';
+                    document.getElementById('statusDot').style.boxShadow = '0 0 10px var(--success)';
+                    document.getElementById('statusText').innerText = 'LIVE DATA';
+                } else {
+                    console.warn("[WARN] Data marked as invalid by ESP32.");
                 }
-            } catch(e) { document.getElementById('statusDot').style.background = '#ef4444'; }
+            } catch (err) {
+                console.error("[ERROR] Fetch failed:", err);
+                document.getElementById('statusDot').style.background = 'var(--danger)';
+                document.getElementById('statusDot').style.boxShadow = '0 0 10px var(--danger)';
+                document.getElementById('statusText').innerText = 'OFFLINE';
+            }
         }
-        setInterval(update, 1000); update();
+
+        function updateCamera() {
+            const camImg = document.getElementById('cameraFeed');
+            camImg.src = "/capture?t=" + Date.now();
+        }
+
+        setInterval(fetchData, fetchInterval);
+        setInterval(updateCamera, 10000);
+        fetchData();
+        updateCamera();
+        drawRadar(0, 0); // Initial draw
     </script>
 </body>
 </html>
@@ -272,6 +627,22 @@ void handleStatus() {
   }
   out += "}";
   server.send(200, "application/json", out);
+}
+
+// Route: /capture (Take a picture)
+void handleCapture() {
+  camera_fb_t * fb = NULL;
+  fb = esp_camera_fb_get();
+  if (!fb) {
+    Serial.println("Camera capture failed");
+    server.send(500, "text/plain", "Camera capture failed");
+    return;
+  }
+  
+  server.sendHeader("Content-Type", "image/jpeg");
+  server.sendHeader("Content-Disposition", "inline; filename=capture.jpg");
+  server.sendContent((const char *)fb->buf, fb->len);
+  esp_camera_fb_return(fb);
 }
 
 // Route: /json (Structured data for frontend)
@@ -358,11 +729,52 @@ void setup() {
   // 2. Storage Setup
   sdAvailable = initSD();
 
-  // 3. Server Setup
+  // 3. Camera Setup
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = Y2_GPIO_NUM;
+  config.pin_d1 = Y3_GPIO_NUM;
+  config.pin_d2 = Y4_GPIO_NUM;
+  config.pin_d3 = Y5_GPIO_NUM;
+  config.pin_d4 = Y6_GPIO_NUM;
+  config.pin_d5 = Y7_GPIO_NUM;
+  config.pin_d6 = Y8_GPIO_NUM;
+  config.pin_d7 = Y9_GPIO_NUM;
+  config.pin_xclk = XCLK_GPIO_NUM;
+  config.pin_pclk = PCLK_GPIO_NUM;
+  config.pin_vsync = VSYNC_GPIO_NUM;
+  config.pin_href = HREF_GPIO_NUM;
+  config.pin_sccb_sda = SIOD_GPIO_NUM;
+  config.pin_sccb_scl = SIOC_GPIO_NUM;
+  config.pin_pwdn = PWDN_GPIO_NUM;
+  config.pin_reset = RESET_GPIO_NUM;
+  config.xclk_freq_hz = 20000000;
+  config.pixel_format = PIXFORMAT_JPEG;
+
+  if(psramFound()){
+    config.frame_size = FRAMESIZE_VGA;
+    config.jpeg_quality = 10;
+    config.fb_count = 2;
+  } else {
+    config.frame_size = FRAMESIZE_QVGA;
+    config.jpeg_quality = 12;
+    config.fb_count = 1;
+  }
+
+  esp_err_t err = esp_camera_init(&config);
+  if (err != ESP_OK) {
+    Serial.printf("Camera init failed with error 0x%x\n", err);
+  } else {
+    Serial.println("[+] Camera Initialized.");
+  }
+
+  // 4. Server Setup
   server.on("/", handleData);
   server.on("/data", handleData);
   server.on("/status", handleStatus);
   server.on("/json", handleJson);
+  server.on("/capture", handleCapture);
   server.onNotFound(handleNotFound);
   server.begin();
   
