@@ -821,7 +821,11 @@ void loop() {
           Serial.println("[PACKET] Valid sensor data received: " + sensorData);
           logToSD(sensorData);
         } else {
-          Serial.println("[WARN] Improper packet ignored (Expected 11 commas, found " + String(commaCount) + "): " + input);
+          Serial.print("[WARN] Improper packet ignored. Found ");
+          Serial.print(commaCount);
+          Serial.print(" commas, Length: ");
+          Serial.print(input.length());
+          Serial.println(". Data: " + input);
         }
       }
     }

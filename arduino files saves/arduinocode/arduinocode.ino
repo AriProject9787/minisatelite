@@ -31,22 +31,35 @@ void setup()
 {
 Serial.begin(115200);
 
-dht.begin();
-Wire.begin();
-bmp.begin();
-mpu.initialize();
+  dht.begin();
+  Wire.begin();
+  if (!bmp.begin()) {
+    Serial.println("[-] Could not find a valid BMP280 sensor, check wiring!");
+  } else {
+    Serial.println("[+] BMP280 initialized.");
+  }
+  mpu.initialize();
+  if (!mpu.testConnection()) {
+    Serial.println("[-] MPU6050 connection failed");
+  } else {
+    Serial.println("[+] MPU6050 connection successful");
+  }
 
 pinMode(FLAME,INPUT);
 
-gpsSerial.begin(9600);
-espSerial.begin(9600);
-
-radarServo.attach(6);
+  gpsSerial.begin(9600);
+  espSerial.begin(9600);
+  
+  gpsSerial.listen(); // Start by listening to GPS
+  
+  radarServo.attach(6);
 }
 
 void loop()
 {
+  
   // Pass-through: If ESP32 sends something (like its IP), print it to Serial Monitor
+  espSerial.listen();
   while (espSerial.available()) {
     String fromESP = espSerial.readStringUntil('\n');
     fromESP.trim();
@@ -84,13 +97,19 @@ float altitude=bmp.readAltitude(1013.25);
 int16_t ax,ay,az,gx,gy,gz;
 mpu.getMotion6(&ax,&ay,&az,&gx,&gy,&gz);
 
-// GPS
-while(gpsSerial.available() > 0)
-  gps.encode(gpsSerial.read());
+// GPS Reading Window
+gpsSerial.listen();
+unsigned long startGPS = millis();
+while (millis() - startGPS < 100) { // Give GPS 100ms to send data each loop
+  while (gpsSerial.available() > 0) {
+    gps.encode(gpsSerial.read());
+  }
+}
 
 double lat = gps.location.isValid() ? gps.location.lat() : 0.000000;
 double lng = gps.location.isValid() ? gps.location.lng() : 0.000000;
 bool gpsFix = gps.location.isValid();
+int satellites = gps.satellites.value();
 
 // FLAME
 int flame=digitalRead(FLAME);
@@ -110,6 +129,7 @@ int flame=digitalRead(FLAME);
                     String(lat, 6) + "," + String(lng, 6) + "," + String(flame);
     
     // Send to ESP32
+    espSerial.listen();
     espSerial.println(packet);
     
     // Print all sensor data to Serial Monitor for local debugging
@@ -121,6 +141,7 @@ int flame=digitalRead(FLAME);
     Serial.print("  Pres: "); Serial.print(pressure); Serial.print(" hPa | Alt: "); Serial.print(altitude); Serial.println(" m");
     Serial.print("  Accel: X:"); Serial.print(ax); Serial.print(" Y:"); Serial.print(ay); Serial.print(" Z:"); Serial.println(az);
     Serial.print("  GPS:  Lat:"); Serial.print(lat, 6); Serial.print(" Lng:"); Serial.print(lng, 6); 
+    Serial.print(" Sats: "); Serial.print(satellites);
     if (!gpsFix) Serial.println(" (NO FIX)"); else Serial.println(" (FIXED)");
     Serial.print("  Flame: "); Serial.println(flame == 0 ? "!!! FIRE !!!" : "SAFE");
     Serial.println("==========================================");
