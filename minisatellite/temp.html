@@ -113,34 +113,43 @@
           <button id="mode-toggle" onclick="toggleDataMode()" class="bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 px-3 py-2 rounded-lg transition-all duration-150">
             MODE: <span id="mode-label" class="font-bold text-white">LIVE</span>
           </button>
+
+          <button onclick="toggleWiringModal()" class="bg-gradient-to-r from-cyan-950 to-indigo-950 hover:from-cyan-900 hover:to-indigo-900 border border-cyan-400/60 text-cyan-200 px-3 py-2 rounded-lg transition-all duration-150 flex items-center space-x-1.5 shadow-lg shadow-cyan-950/50">
+            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+            </svg>
+            <span class="font-bold tracking-wide">WIRING DIAGRAM</span>
+          </button>
         </div>
 
       </div>
 
       <!-- Micro Status Bar -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-800/80 text-[11px] mono text-slate-400">
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-4 pt-3 border-t border-slate-800/80 text-[11px] mono text-slate-400">
         <div>ORBIT ALT: <span class="text-slate-200 font-semibold">524.2 KM</span></div>
         <div>INCLINATION: <span class="text-slate-200 font-semibold">51.64°</span></div>
         <div>RF LINK: <span class="text-emerald-400 font-semibold">437.450 MHz (S-BAND)</span></div>
+        <div>CABIN RH (DHT22): <span id="hum-val" class="text-teal-300 font-semibold">48.0%</span></div>
         <div>TEMP DRIFT: <span id="drift-val" class="text-cyan-300 font-semibold">STABLE (&plusmn;0.2°C)</span></div>
       </div>
     </header>
 
-    <!-- ESP32 Telemetry Downlink Control Bar (10-Second Telemetry Sync) -->
+    <!-- Telemetry Downlink Control Bar: Dual Wi-Fi & USB Web Serial Gateway -->
     <div class="bg-slate-900/80 backdrop-blur-md border border-cyan-500/30 rounded-2xl p-4 mb-6 shadow-2xl relative">
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 font-mono text-xs">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 font-mono text-xs">
         
-        <!-- Left: Device Downlink Input & Controls -->
+        <!-- Left: Device Downlink Input & Controls (ESP32 WiFi + Arduino USB) -->
         <div class="flex flex-wrap items-center gap-2">
+          <!-- ESP32 Wi-Fi Controls -->
           <div class="flex items-center space-x-2 bg-cyan-950/70 border border-cyan-500/40 px-2.5 py-1.5 rounded-lg text-cyan-300 font-semibold">
             <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
             <span>ESP32 HOST IP:</span>
           </div>
           
           <input id="esp-url-input" type="text" placeholder="192.168.1.x or /data" 
-            class="bg-slate-950 border border-slate-700 focus:border-cyan-400 text-slate-100 px-3 py-1.5 rounded-lg focus:outline-none w-48 sm:w-64 tracking-wider placeholder-slate-600 transition-colors">
+            class="bg-slate-950 border border-slate-700 focus:border-cyan-400 text-slate-100 px-3 py-1.5 rounded-lg focus:outline-none w-44 sm:w-56 tracking-wider placeholder-slate-600 transition-colors">
           
-          <button onclick="applyEspUrl()" class="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition-all shadow-md shadow-cyan-950 flex items-center space-x-1">
+          <button onclick="applyEspUrl()" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition-all shadow-md shadow-cyan-950 flex items-center space-x-1">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
             </svg>
@@ -151,12 +160,36 @@
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
             </svg>
-            <span>FETCH NOW</span>
+            <span>POLL</span>
+          </button>
+
+          <!-- Divider -->
+          <div class="hidden sm:block w-px h-6 bg-slate-700 mx-1"></div>
+
+          <!-- Direct Arduino Uno USB Serial (Web Serial API) -->
+          <button id="usb-serial-btn" onclick="toggleWebSerial()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all shadow-md shadow-indigo-950 flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span>CONNECT ARDUINO (USB)</span>
+          </button>
+
+          <button onclick="toggleWiringModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 transition-all flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+            </svg>
+            <span>CIRCUIT DIAGRAM</span>
           </button>
         </div>
 
         <!-- Right: 10s Countdown, Sync Status & Latency -->
         <div class="flex flex-wrap items-center gap-3">
+          <!-- USB Serial Status Badge -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 flex items-center space-x-1.5">
+            <span class="text-slate-500">USB LINK:</span>
+            <span id="usb-serial-status" class="text-slate-400 font-semibold">STANDBY</span>
+          </div>
+
           <!-- 10s Countdown Progress Indicator -->
           <div class="bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-1.5 flex items-center space-x-2">
             <span class="text-slate-500">CYCLE:</span>
@@ -184,15 +217,15 @@
       <!-- T1 Payload Core -->
       <div class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-rose-500 border border-slate-800/90 hover:border-rose-500/50 transition-all duration-200">
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-          <span class="font-mono">T1 // SENSOR</span>
-          <span class="px-1.5 py-0.5 rounded bg-rose-950/60 text-rose-300 text-[10px] mono border border-rose-800/50">OBC CORE</span>
+          <span class="font-mono">T1 // SENSOR (D2)</span>
+          <span class="px-1.5 py-0.5 rounded bg-rose-950/60 text-rose-300 text-[10px] mono border border-rose-800/50">DHT22 #1 // OBC CORE</span>
         </div>
         <div class="flex items-baseline justify-between mt-1">
           <p id="val-t1" class="text-3xl font-bold font-mono text-rose-400">--°C</p>
           <span id="stat-t1" class="text-[11px] font-mono text-emerald-400">NOMINAL</span>
         </div>
         <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
-          <span>LIMIT: &minus;20°C ~ +85°C</span>
+          <span id="hum-t1" class="text-rose-300/90 font-mono font-medium">RH: --%</span>
           <span id="rate-t1" class="text-slate-400">0.0°/s</span>
         </div>
       </div>
@@ -200,15 +233,15 @@
       <!-- T2 Solar Array -->
       <div class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-emerald-500 border border-slate-800/90 hover:border-emerald-500/50 transition-all duration-200">
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-          <span class="font-mono">T2 // SENSOR</span>
-          <span class="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 text-[10px] mono border border-emerald-800/50">SOLAR ARRAY</span>
+          <span class="font-mono">T2 // SENSOR (D3)</span>
+          <span class="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 text-[10px] mono border border-emerald-800/50">DHT22 #2 // SOLAR ARRAY</span>
         </div>
         <div class="flex items-baseline justify-between mt-1">
           <p id="val-t2" class="text-3xl font-bold font-mono text-emerald-400">--°C</p>
           <span id="stat-t2" class="text-[11px] font-mono text-emerald-400">NOMINAL</span>
         </div>
         <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
-          <span>LIMIT: &minus;40°C ~ +110°C</span>
+          <span id="hum-t2" class="text-emerald-300/90 font-mono font-medium">RH: --%</span>
           <span id="rate-t2" class="text-slate-400">0.0°/s</span>
         </div>
       </div>
@@ -216,15 +249,15 @@
       <!-- T3 Battery Module -->
       <div class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-cyan-500 border border-slate-800/90 hover:border-cyan-500/50 transition-all duration-200">
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-          <span class="font-mono">T3 // SENSOR</span>
-          <span class="px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 text-[10px] mono border border-cyan-800/50">EPS BATTERY</span>
+          <span class="font-mono">T3 // SENSOR (D4)</span>
+          <span class="px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 text-[10px] mono border border-cyan-800/50">DHT22 #3 // EPS BATTERY</span>
         </div>
         <div class="flex items-baseline justify-between mt-1">
           <p id="val-t3" class="text-3xl font-bold font-mono text-cyan-400">--°C</p>
           <span id="stat-t3" class="text-[11px] font-mono text-emerald-400">OPTIMAL</span>
         </div>
         <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
-          <span>LIMIT: 0°C ~ +45°C</span>
+          <span id="hum-t3" class="text-cyan-300/90 font-mono font-medium">RH: --%</span>
           <span id="rate-t3" class="text-slate-400">0.0°/s</span>
         </div>
       </div>
@@ -232,22 +265,22 @@
       <!-- T4 External Radiator -->
       <div class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-amber-500 border border-slate-800/90 hover:border-amber-500/50 transition-all duration-200">
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-          <span class="font-mono">T4 // SENSOR</span>
-          <span class="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 text-[10px] mono border border-amber-800/50">RADIATOR PANEL</span>
+          <span class="font-mono">T4 // SENSOR (D5)</span>
+          <span class="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 text-[10px] mono border border-amber-800/50">DHT22 #4 // RADIATOR</span>
         </div>
         <div class="flex items-baseline justify-between mt-1">
           <p id="val-t4" class="text-3xl font-bold font-mono text-amber-400">--°C</p>
           <span id="stat-t4" class="text-[11px] font-mono text-emerald-400">NOMINAL</span>
         </div>
         <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
-          <span>LIMIT: &minus;60°C ~ +70°C</span>
+          <span id="hum-t4" class="text-amber-300/90 font-mono font-medium">RH: --%</span>
           <span id="rate-t4" class="text-slate-400">0.0°/s</span>
         </div>
       </div>
 
     </div>
 
-    <!-- CAMERA & OPTICAL RECONNAISSANCE SECTION -->
+    <!-- CAMERA & OPTICAL RECONNAISSANCE SECTION (ESP32-CAM OV2640) -->
     <div class="bg-slate-900/80 backdrop-blur-md p-4 md:p-5 rounded-2xl border border-cyan-500/30 shadow-2xl mb-6 relative">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-800 gap-2">
         <div class="flex items-center space-x-3">
@@ -256,19 +289,33 @@
             <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
           </span>
           <h2 class="font-bold tracking-wider text-sm md:text-base text-cyan-300 font-mono">
-            OPTICAL DOWNLINK // CAM-01 NADIR EARTH RECON
+            OPTICAL DOWNLINK // ESP32-CAM OV2640 RECON FEED
           </h2>
-          <span class="text-[10px] mono px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-semibold tracking-wider">LIVE FEED</span>
+          <span id="cam-status-badge" class="text-[10px] mono px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-semibold tracking-wider">30s SNAPSHOT SYNC</span>
         </div>
 
-        <div class="flex items-center space-x-2 text-xs mono">
-          <input id="cam-url-input" type="text" placeholder="/cam (or /stream / jpg url)" value="/cam" 
-            class="bg-slate-950 border border-slate-700 text-slate-200 px-2 py-1 rounded text-xs focus:outline-none focus:border-cyan-400 w-36 sm:w-48">
-          <button onclick="applyCamUrl()" class="px-2.5 py-1 rounded bg-cyan-950 border border-cyan-500/50 hover:bg-cyan-900 text-cyan-300 text-xs">
+        <div class="flex flex-wrap items-center gap-2 text-xs mono">
+          <!-- Low / High Performance Selector -->
+          <div class="flex items-center rounded-lg bg-slate-950 border border-slate-700 p-0.5">
+            <button id="cam-perf-low" onclick="setCamPerformance('low')" class="px-2 py-1 rounded text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400 transition-all">
+              PERF: LOW (320x240)
+            </button>
+            <button id="cam-perf-high" onclick="setCamPerformance('high')" class="px-2 py-1 rounded text-xs font-bold text-slate-400 hover:text-slate-200 transition-all">
+              HIGH (640x480)
+            </button>
+          </div>
+
+          <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700 text-xs font-mono">
+            INTERVAL: 30s
+          </span>
+          <input id="cam-url-input" type="text" placeholder="/cam or http://ip/cam" value="/cam" 
+            class="bg-slate-950 border border-slate-700 text-slate-200 px-2 py-1 rounded text-xs focus:outline-none focus:border-cyan-400 w-32 sm:w-44">
+          <button onclick="applyCamUrl()" class="px-2.5 py-1 rounded bg-cyan-950 border border-cyan-500/50 hover:bg-cyan-900 text-cyan-300 text-xs font-semibold">
             APPLY
           </button>
-          <button onclick="reloadCamFeed()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs">
-            RELOAD
+          <button onclick="captureNewPhoto()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span>CAPTURE</span>
           </button>
         </div>
       </div>
@@ -312,7 +359,7 @@
               TARGET: LAT 28°36'N // LON 80°36'W (CAPE CANAVERAL PASS)
             </div>
             <div class="bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded border border-slate-700 text-slate-400">
-              FPS: <span id="cam-fps" class="text-cyan-300 font-bold">10.0</span> // BITRATE: 1.4 Mbps
+              DOWNLINK: <span id="cam-interval-display" class="text-cyan-300 font-bold">30s INTERVAL</span> // RES: <span id="cam-res-display" class="text-slate-200 font-bold">QVGA (320x240)</span>
             </div>
           </div>
 
@@ -330,7 +377,7 @@
             <span class="w-3 h-3 rounded-sm bg-rose-500 inline-block shadow-sm shadow-rose-500/50"></span>
             <h2 class="font-semibold tracking-wide text-sm md:text-base text-rose-300">CHANNEL 1 : OBC PROCESSOR &amp; COMMS</h2>
           </div>
-          <span class="text-xs font-mono text-rose-400/90 bg-rose-950/50 px-2 py-0.5 rounded border border-rose-800/30">DS18B20 #1</span>
+          <span class="text-xs font-mono text-rose-400/90 bg-rose-950/50 px-2 py-0.5 rounded border border-rose-800/30">DHT22 #1 (Pin D2)</span>
         </div>
         <div class="h-64 w-full">
           <canvas id="chart-t1"></canvas>
@@ -344,7 +391,7 @@
             <span class="w-3 h-3 rounded-sm bg-emerald-500 inline-block shadow-sm shadow-emerald-500/50"></span>
             <h2 class="font-semibold tracking-wide text-sm md:text-base text-emerald-300">CHANNEL 2 : SOLAR ARRAY &amp; CELL BANK</h2>
           </div>
-          <span class="text-xs font-mono text-emerald-400/90 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/30">DS18B20 #2</span>
+          <span class="text-xs font-mono text-emerald-400/90 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/30">DHT22 #2 (Pin D3)</span>
         </div>
         <div class="h-64 w-full">
           <canvas id="chart-t2"></canvas>
@@ -358,7 +405,7 @@
             <span class="w-3 h-3 rounded-sm bg-cyan-400 inline-block shadow-sm shadow-cyan-400/50"></span>
             <h2 class="font-semibold tracking-wide text-sm md:text-base text-cyan-300">CHANNEL 3 : EPS BATTERY PACK ENCLOSURE</h2>
           </div>
-          <span class="text-xs font-mono text-cyan-400/90 bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-800/30">DS18B20 #3</span>
+          <span class="text-xs font-mono text-cyan-400/90 bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-800/30">DHT22 #3 (Pin D4)</span>
         </div>
         <div class="h-64 w-full">
           <canvas id="chart-t3"></canvas>
@@ -372,7 +419,7 @@
             <span class="w-3 h-3 rounded-sm bg-amber-400 inline-block shadow-sm shadow-amber-400/50"></span>
             <h2 class="font-semibold tracking-wide text-sm md:text-base text-amber-300">CHANNEL 4 : HULL DEPLOYABLE RADIATOR</h2>
           </div>
-          <span class="text-xs font-mono text-amber-400/90 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/30">DS18B20 #4</span>
+          <span class="text-xs font-mono text-amber-400/90 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/30">DHT22 #4 (Pin D5)</span>
         </div>
         <div class="h-64 w-full">
           <canvas id="chart-t4"></canvas>
@@ -735,29 +782,126 @@
       };
     }
 
-    // Camera controls & fallbacks
+    // Camera controls & fallbacks (ESP32-CAM OV2640 - 30s Downlink Snapshot Sync)
     const defaultCamImage = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80';
     let activeCamUrl = '/cam';
+    let camPerformanceMode = 'low'; // 'low' (QVGA 320x240 - fast & low RAM) or 'high' (VGA 640x480 - high res)
+    let lastCamCaptureTime = 0;
+    const CAM_AUTO_INTERVAL_MS = 30000; // 30 seconds interval
+
+    function getNormalizedCamUrl() {
+      let url = activeCamUrl.trim();
+      if (!url) {
+        if (activeEspUrl) {
+          let hostMatch = activeEspUrl.match(/^(?:https?:\/\/)?([^\/:]+)/i);
+          let host = hostMatch ? hostMatch[1] : activeEspUrl;
+          return `http://${host}/cam`;
+        }
+        return '/cam';
+      }
+      if (url.includes('/stream')) {
+        url = url.replace(/\/stream.*$/, '/cam');
+      }
+      if (!url.endsWith('/cam') && !url.endsWith('/capture')) {
+        url = url.endsWith('/') ? url + 'cam' : url + '/cam';
+      }
+      return url;
+    }
+
+    // Toggle Low / High Performance mode directly on ESP32-CAM
+    async function setCamPerformance(mode) {
+      camPerformanceMode = mode;
+      const btnLow = document.getElementById('cam-perf-low');
+      const btnHigh = document.getElementById('cam-perf-high');
+      const resDisplay = document.getElementById('cam-res-display');
+
+      if (mode === 'high') {
+        if (btnHigh) {
+          btnHigh.className = 'px-2 py-1 rounded text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400 transition-all';
+        }
+        if (btnLow) {
+          btnLow.className = 'px-2 py-1 rounded text-xs font-bold text-slate-400 hover:text-slate-200 transition-all';
+        }
+        if (resDisplay) resDisplay.innerText = 'VGA (640x480)';
+      } else {
+        if (btnLow) {
+          btnLow.className = 'px-2 py-1 rounded text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400 transition-all';
+        }
+        if (btnHigh) {
+          btnHigh.className = 'px-2 py-1 rounded text-xs font-bold text-slate-400 hover:text-slate-200 transition-all';
+        }
+        if (resDisplay) resDisplay.innerText = 'QVGA (320x240)';
+      }
+
+      // Notify ESP32-CAM via /cam/set?mode=low|high
+      let baseUrl = getNormalizedCamUrl().replace(/\/cam.*$/, '');
+      if (baseUrl && baseUrl !== '/cam') {
+        try {
+          const controller = new AbortController();
+          const tId = setTimeout(() => controller.abort(), 3000);
+          await fetch(`${baseUrl}/cam/set?mode=${mode}`, { signal: controller.signal });
+          clearTimeout(tId);
+          logTelemetry('CAM_PERF', `Camera resolution set to ${mode.toUpperCase()} mode.`);
+        } catch (e) {
+          // Non-blocking if offline
+        }
+      }
+
+      // Immediately take a fresh shot with new settings
+      captureNewPhoto(true);
+    }
 
     function applyCamUrl() {
       const input = document.getElementById('cam-url-input');
-      const camImg = document.getElementById('satellite-camera');
       activeCamUrl = input.value.trim() || '/cam';
-      camImg.src = activeCamUrl + '?t=' + Date.now();
+      if (activeCamUrl.includes('/stream')) {
+        activeCamUrl = activeCamUrl.replace(/\/stream.*$/, '/cam');
+        if (input) input.value = activeCamUrl;
+      }
       logTelemetry('OPTICAL_CFG', `Camera downlink pointing updated to: ${activeCamUrl}`);
+      captureNewPhoto(true);
     }
 
-    function reloadCamFeed() {
+    // Explicitly captures a fresh frame from ESP32-CAM
+    function captureNewPhoto(force = false) {
+      const now = Date.now();
+      if (!force && (now - lastCamCaptureTime < CAM_AUTO_INTERVAL_MS - 2000)) {
+        return; // Wait until 30s interval elapses
+      }
+      lastCamCaptureTime = now;
+
       const camImg = document.getElementById('satellite-camera');
-      camImg.src = (activeCamUrl || '/cam') + '?t=' + Date.now();
-      logTelemetry('OPTICAL_SYNC', 'Refreshed optical telemetry camera buffer.');
+      const targetUrl = getNormalizedCamUrl();
+      if (!camImg) return;
+
+      const cacheBustUrl = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 't=' + now;
+      
+      // Preload test image to avoid blanking
+      const testImg = new Image();
+      testImg.onload = () => {
+        camImg.src = cacheBustUrl;
+        const camBadge = document.getElementById('cam-status-badge');
+        if (camBadge) {
+          camBadge.innerText = '30s CAPTURED';
+          camBadge.className = 'text-[10px] mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-semibold tracking-wider';
+        }
+        logTelemetry('OPTICAL_SYNC', `New 30s optical frame received from ${targetUrl} [${camPerformanceMode.toUpperCase()}]`);
+      };
+      testImg.onerror = () => {
+        handleCamError();
+      };
+      testImg.src = cacheBustUrl;
     }
 
     function handleCamError() {
       const camImg = document.getElementById('satellite-camera');
-      // If local /cam endpoint is not responding, fallback to orbital Earth photo
-      if (camImg.src !== defaultCamImage) {
-        logTelemetry('OPTICAL_WARN', 'Live feed endpoint unavailable. Fallback to cached orbital snapshot.', true);
+      const camBadge = document.getElementById('cam-status-badge');
+      if (camBadge) {
+        camBadge.innerText = 'CAMERA RETRY';
+        camBadge.className = 'text-[10px] mono px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60 font-semibold tracking-wider';
+      }
+      if (camImg && camImg.src !== defaultCamImage) {
+        logTelemetry('OPTICAL_WARN', 'Local /cam endpoint not responding. Displaying cached orbital recon buffer.', true);
         camImg.src = defaultCamImage;
       }
     }
@@ -818,7 +962,19 @@
       if (!input) return;
       activeEspUrl = input.value.trim();
       localStorage.setItem('esp32_url', activeEspUrl);
-      logTelemetry('CONFIG_UPD', `ESP32 Target URL configured to: ${getFullEspDataUrl()}`);
+      logTelemetry('CONFIG_UPD', `ESP32-CAM Target URL configured to: ${getFullEspDataUrl()}`);
+
+      // Auto-point camera feed to ESP32-CAM host
+      let hostMatch = activeEspUrl.match(/^(?:https?:\/\/)?([^\/:]+)/i);
+      let host = hostMatch ? hostMatch[1] : activeEspUrl;
+      if (host && !host.startsWith('/')) {
+        const camInput = document.getElementById('cam-url-input');
+        activeCamUrl = `http://${host}/cam`;
+        if (camInput) camInput.value = activeCamUrl;
+        captureNewPhoto();
+        logTelemetry('CAM_AUTO', `Camera feed automatically linked to ${activeCamUrl}`);
+      }
+
       pollNow();
     }
 
@@ -950,6 +1106,37 @@
       document.getElementById('val-t3').innerText = cleanData.t3.toFixed(1) + '°C';
       document.getElementById('val-t4').innerText = cleanData.t4.toFixed(1) + '°C';
 
+      // Update individual 4x DHT22 humidities
+      const h1 = parseFloat(data.h1 ?? data.hum ?? 0);
+      const h2 = parseFloat(data.h2 ?? data.hum ?? 0);
+      const h3 = parseFloat(data.h3 ?? data.hum ?? 0);
+      const h4 = parseFloat(data.h4 ?? data.hum ?? 0);
+
+      const elH1 = document.getElementById('hum-t1');
+      if (elH1) elH1.innerText = h1 > 0 ? `RH: ${h1.toFixed(1)}%` : 'RH: --%';
+      const elH2 = document.getElementById('hum-t2');
+      if (elH2) elH2.innerText = h2 > 0 ? `RH: ${h2.toFixed(1)}%` : 'RH: --%';
+      const elH3 = document.getElementById('hum-t3');
+      if (elH3) elH3.innerText = h3 > 0 ? `RH: ${h3.toFixed(1)}%` : 'RH: --%';
+      const elH4 = document.getElementById('hum-t4');
+      if (elH4) elH4.innerText = h4 > 0 ? `RH: ${h4.toFixed(1)}%` : 'RH: --%';
+
+      // Update composite cabin RH
+      if (data.hum !== undefined && data.hum !== null) {
+        const humVal = parseFloat(data.hum);
+        const humEl = document.getElementById('hum-val');
+        if (humEl) humEl.innerText = `${humVal.toFixed(1)}% (DHT22 avg)`;
+      }
+
+      // Update camera status indicator
+      const camStatusEl = document.getElementById('cam-status-badge');
+      if (camStatusEl && data.camera) {
+        camStatusEl.innerText = data.camera === 'online' ? 'OV2640 ONLINE' : 'OV2640 OFFLINE';
+        camStatusEl.className = data.camera === 'online'
+          ? 'text-[10px] mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-semibold tracking-wider'
+          : 'text-[10px] mono px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-semibold tracking-wider';
+      }
+
       // Update Subsystem nominal/critical statuses
       const s1 = evalSensorStatus(cleanData.t1, -20, 85);
       const s2 = evalSensorStatus(cleanData.t2, -40, 110);
@@ -997,10 +1184,9 @@
       const syncEl = document.getElementById('last-sync-time');
       if (syncEl) syncEl.innerText = timeStr;
 
-      // Periodically refresh camera if pointing at live ESP32-CAM endpoint
-      if (!simulationMode && activeCamUrl && activeCamUrl !== defaultCamImage) {
-        const camImg = document.getElementById('satellite-camera');
-        if (camImg) camImg.src = activeCamUrl + '?t=' + Date.now();
+      // Synchronize optical image downlink (every 30 seconds interval)
+      if (!simulationMode) {
+        captureNewPhoto(false); // Checks CAM_AUTO_INTERVAL_MS (30s) automatically
       }
 
       // Log 10-second telemetry packet received
@@ -1204,8 +1390,388 @@
       }, POLL_INTERVAL * 1000);
     }
 
+    // -------------------------------------------------------------------------
+    // WEB SERIAL API: DIRECT ARDUINO UNO USB TELEMETRY LINK
+    // -------------------------------------------------------------------------
+    let serialPort = null;
+    let serialReader = null;
+    let isSerialConnected = false;
+    let serialBuffer = '';
+
+    async function toggleWebSerial() {
+      if (!('serial' in navigator)) {
+        alert('Web Serial API is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Opera to connect directly to Arduino Uno via USB.');
+        return;
+      }
+
+      const serialBtn = document.getElementById('usb-serial-btn');
+      const serialStatus = document.getElementById('usb-serial-status');
+
+      if (isSerialConnected) {
+        // Disconnect
+        try {
+          if (serialReader) await serialReader.cancel();
+          if (serialPort) await serialPort.close();
+        } catch (e) {
+          console.warn('Error closing serial port:', e);
+        }
+        isSerialConnected = false;
+        serialPort = null;
+        serialReader = null;
+        if (serialBtn) {
+          serialBtn.className = 'px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all shadow-md shadow-indigo-950 flex items-center space-x-1.5';
+          serialBtn.innerHTML = `
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span>CONNECT ARDUINO (USB)</span>
+          `;
+        }
+        if (serialStatus) {
+          serialStatus.innerText = 'DISCONNECTED';
+          serialStatus.className = 'text-slate-500';
+        }
+        logTelemetry('USB_LINK', 'Arduino Uno USB Serial port disconnected.');
+        return;
+      }
+
+      try {
+        serialPort = await navigator.serial.requestPort();
+        await serialPort.open({ baudRate: 9600 });
+        isSerialConnected = true;
+
+        if (serialBtn) {
+          serialBtn.className = 'px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold transition-all shadow-md shadow-rose-950 flex items-center space-x-1.5';
+          serialBtn.innerHTML = `
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            <span>DISCONNECT USB</span>
+          `;
+        }
+        if (serialStatus) {
+          serialStatus.innerText = '9600 BAUD LIVE';
+          serialStatus.className = 'text-emerald-400 font-bold';
+        }
+
+        const connIndicator = document.getElementById('conn-indicator');
+        const connText = document.getElementById('conn-text');
+        if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 glow-badge status-pulse';
+        if (connText) {
+          connText.className = 'text-emerald-400 font-medium';
+          connText.innerText = 'USB ARDUINO ACTIVE';
+        }
+
+        logTelemetry('USB_LINK', 'Arduino Uno connected via Web Serial API @ 9600 Baud. Receiving live 4-sensor packets.');
+        readSerialStream();
+      } catch (err) {
+        console.error('Serial connection error:', err);
+        logTelemetry('USB_ERR', `Web Serial connection failed: ${err.message}`, true);
+      }
+    }
+
+    async function readSerialStream() {
+      const textDecoder = new TextDecoderStream();
+      const readableStreamClosed = serialPort.readable.pipeTo(textDecoder.writable);
+      const reader = textDecoder.readable.getReader();
+      serialReader = reader;
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            serialBuffer += value;
+            const lines = serialBuffer.split('\n');
+            serialBuffer = lines.pop(); // Retain incomplete chunk
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                  const data = JSON.parse(trimmed);
+                  applyTelemetryData(data, 1);
+                } catch (parseErr) {
+                  // Incomplete or malformed JSON line
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        if (isSerialConnected) {
+          logTelemetry('USB_WARN', `Serial read stream closed: ${err.message}`);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // WIRING & CONNECTION DIAGRAM MODAL HANDLER
+    // -------------------------------------------------------------------------
+    function toggleWiringModal() {
+      const modal = document.getElementById('wiring-modal');
+      if (!modal) return;
+      if (modal.classList.contains('hidden')) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      } else {
+        modal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+      }
+    }
+
+    function switchWiringTab(tabId) {
+      // Hide all tabs
+      document.querySelectorAll('.wiring-tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.wiring-tab-btn').forEach(el => {
+        el.classList.remove('bg-cyan-500/20', 'text-cyan-300', 'border-cyan-400');
+        el.classList.add('text-slate-400', 'border-transparent');
+      });
+
+      // Show target tab
+      const targetContent = document.getElementById('wiring-tab-' + tabId);
+      const targetBtn = document.getElementById('btn-tab-' + tabId);
+      if (targetContent) targetContent.classList.remove('hidden');
+      if (targetBtn) {
+        targetBtn.classList.add('bg-cyan-500/20', 'text-cyan-300', 'border-cyan-400');
+        targetBtn.classList.remove('text-slate-400', 'border-transparent');
+      }
+    }
+
+    // Close modal on Escape key
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('wiring-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+          toggleWiringModal();
+        }
+      }
+    });
+
     // Launch connection and telemetry loop
     initEspConnection();
   </script>
+
+  <!-- ========================================================================= -->
+  <!-- HARDWARE WIRING & CONNECTION DIAGRAM MODAL DIALOG                         -->
+  <!-- ========================================================================= -->
+  <div id="wiring-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
+    <div class="relative w-full max-w-5xl bg-slate-900 border border-cyan-500/40 rounded-2xl shadow-2xl p-5 md:p-7 overflow-hidden my-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+        <div class="flex items-center space-x-3">
+          <div class="p-2.5 rounded-xl bg-cyan-950 border border-cyan-400/40 text-cyan-400">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 mono font-semibold">CIRCUIT SCHEMATICS</span>
+              <span class="text-xs text-slate-400 mono">ARDUINO UNO + ESP32 + 4 SENSORS</span>
+            </div>
+            <h2 class="text-lg md:text-xl font-bold text-white tracking-wide">
+              MINISATELLITE HARDWARE CONNECTION DIAGRAM
+            </h2>
+          </div>
+        </div>
+
+        <button onclick="toggleWiringModal()" class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-3 mb-5 text-xs mono">
+        <button id="btn-tab-overview" onclick="switchWiringTab('overview')" class="wiring-tab-btn px-3 py-1.5 rounded-lg border border-cyan-400 bg-cyan-500/20 text-cyan-300 font-bold transition-all">
+          1. SYSTEM ARCHITECTURE
+        </button>
+        <button id="btn-tab-dht22" onclick="switchWiringTab('dht22')" class="wiring-tab-btn px-3 py-1.5 rounded-lg border border-transparent text-slate-400 hover:text-slate-200 transition-all">
+          2. 4x DHT22 SENSORS WIRING
+        </button>
+        <button id="btn-tab-esp32" onclick="switchWiringTab('esp32')" class="wiring-tab-btn px-3 py-1.5 rounded-lg border border-transparent text-slate-400 hover:text-slate-200 transition-all">
+          3. ARDUINO TO ESP32-CAM (UART)
+        </button>
+      </div>
+
+      <!-- Tab 1: System Overview -->
+      <div id="wiring-tab-overview" class="wiring-tab-content space-y-4">
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 mono text-xs leading-relaxed overflow-x-auto text-cyan-300">
+<pre class="text-slate-300">
++-----------------------------------------------------------------------------------+
+|               MINISATELLITE 4x DHT22 THERMAL TELEMETRY ARCHITECTURE               |
++-----------------------------------------------------------------------------------+
+
+     [DHT22 #1] (Pin D2) - OBC Processor Core  ----\
+     [DHT22 #2] (Pin D3) - Solar Array Panel   -----\
+     [DHT22 #3] (Pin D4) - EPS Battery Bay     -----> [ ARDUINO UNO ]
+     [DHT22 #4] (Pin D5) - Hull Radiator Plate -----/   (Samples, filters, builds JSON)
+                                                             |
+                   +-----------------------------------------+-------------------------+
+                   |                                                                   |
+      [ PATHWAY 1: WIRELESS RELAY ]                                       [ PATHWAY 2: DIRECT GROUND ]
+                   |                                                                   |
+         Pin 11 TX -> 1kΩ/2kΩ Divider                                             USB Cable (COM port)
+                   v                                                                   v
+          [ ESP32-CAM NODE ]                                                  [ CHROME / EDGE BROWSER ]
+       (U0R / GPIO 3 RX @ 9600 Baud)                                          (Web Serial API in temp.html)
+                   |                                                                   |
+         Wi-Fi 802.11 b/g/n Downlink                                                   |
+                   v                                                                   |
+    +----------------------------------------------------------------------------------+
+    |           GROUND STATION DASHBOARD: temp.html                                    |
+    |  * 4 Subsystem Gauges  * 4 Real-time Graphs  * 3D Thermal Slab  * Camera Feed    |
+    +----------------------------------------------------------------------------------+
+</pre>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+            <span class="text-cyan-400 font-bold block mb-1">WIRELESS VIA ESP32-CAM</span>
+            <p class="text-slate-400">Arduino Uno transmits 4x DHT22 telemetry via Pin 11 to ESP32-CAM U0R (GPIO 3). ESP32-CAM serves data over Wi-Fi at <code class="text-emerald-400">/data</code> and live OV2640 camera feed at <code class="text-cyan-400">/cam</code> or <code class="text-cyan-400">/stream</code>.</p>
+          </div>
+          <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+            <span class="text-indigo-400 font-bold block mb-1">DIRECT USB GROUND LINK</span>
+            <p class="text-slate-400">Plug Arduino Uno directly into PC via USB. Click <strong>CONNECT ARDUINO (USB)</strong> in this dashboard to receive 4-sensor DHT22 packets directly via Web Serial API.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: 4x DHT22 Digital Sensors -->
+      <div id="wiring-tab-dht22" class="wiring-tab-content hidden space-y-4">
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 mono text-xs overflow-x-auto text-teal-300">
+<pre class="text-slate-300">
++-----------------------------------------------------------------------------------+
+|               4x DHT22 (AM2302) DIGITAL SENSORS ARDUINO UNO SCHEMATIC             |
++-----------------------------------------------------------------------------------+
+
+                     ARDUINO UNO
+                  +---------------+
+            +5V --+ 5V            |
+            GND --+ GND           |
+                  |               |
+                  |  D2 (T1 OBC)  +--+--- [DHT22 #1 Pin 2 DATA]
+                  |               |  |
+                  |               | [4.7kΩ-10kΩ Pull-Up]
+                  |         +5V --+--+
+                  |               |
+                  |  D3 (T2 Solar)+--+--- [DHT22 #2 Pin 2 DATA]
+                  |               |  |
+                  |               | [4.7kΩ-10kΩ Pull-Up]
+                  |         +5V --+--+
+                  |               |
+                  |  D4 (T3 Batt) +--+--- [DHT22 #3 Pin 2 DATA]
+                  |               |  |
+                  |               | [4.7kΩ-10kΩ Pull-Up]
+                  |         +5V --+--+
+                  |               |
+                  |  D5 (T4 Rad)  +--+--- [DHT22 #4 Pin 2 DATA]
+                  |               |  |
+                  |               | [4.7kΩ-10kΩ Pull-Up]
+                  |         +5V --+--+
+                  +---------------+
+
+    DHT22 PINOUT (Looking at front grill with pins pointing downward):
+    * Pin 1 (Left):  VCC -> Connect to Arduino +5V (or +3.3V)
+    * Pin 2:         DATA -> Connect to Digital Pin (D2 / D3 / D4 / D5)
+                     (If bare 4-pin DHT22, place 4.7kΩ to 10kΩ resistor between Pin 1 and Pin 2)
+                     (If 3-pin breakout module, pull-up resistor is already built-in!)
+    * Pin 3:         NC   -> Leave unconnected (Null)
+    * Pin 4 (Right): GND  -> Connect to Arduino GND
+</pre>
+        </div>
+
+        <table class="w-full text-xs mono text-left border border-slate-800 rounded-xl overflow-hidden">
+          <thead class="bg-slate-950 text-slate-400">
+            <tr>
+              <th class="p-2.5">Subsystem Channel</th>
+              <th class="p-2.5">Sensor Model</th>
+              <th class="p-2.5">Arduino Uno Data Pin</th>
+              <th class="p-2.5">VCC Pin</th>
+              <th class="p-2.5">GND Pin</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800 text-slate-300">
+            <tr>
+              <td class="p-2.5 font-bold text-rose-400">T1 // OBC Core</td>
+              <td class="p-2.5">DHT22 (AM2302) #1</td>
+              <td class="p-2.5 font-bold text-cyan-300">Digital Pin D2</td>
+              <td class="p-2.5 text-rose-400">+5V</td>
+              <td class="p-2.5 text-slate-400">GND</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-emerald-400">T2 // Solar Array</td>
+              <td class="p-2.5">DHT22 (AM2302) #2</td>
+              <td class="p-2.5 font-bold text-cyan-300">Digital Pin D3</td>
+              <td class="p-2.5 text-rose-400">+5V</td>
+              <td class="p-2.5 text-slate-400">GND</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-cyan-400">T3 // EPS Battery</td>
+              <td class="p-2.5">DHT22 (AM2302) #3</td>
+              <td class="p-2.5 font-bold text-cyan-300">Digital Pin D4</td>
+              <td class="p-2.5 text-rose-400">+5V</td>
+              <td class="p-2.5 text-slate-400">GND</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-amber-400">T4 // Hull Radiator</td>
+              <td class="p-2.5">DHT22 (AM2302) #4</td>
+              <td class="p-2.5 font-bold text-cyan-300">Digital Pin D5</td>
+              <td class="p-2.5 text-rose-400">+5V</td>
+              <td class="p-2.5 text-slate-400">GND</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tab 3: ESP32-CAM Interconnect -->
+      <div id="wiring-tab-esp32" class="wiring-tab-content hidden space-y-4">
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 mono text-xs overflow-x-auto text-amber-300">
+<pre class="text-slate-300">
++-----------------------------------------------------------------------------------+
+|      ARDUINO UNO TO ESP32-CAM SERIAL INTERCONNECT & VOLTAGE LEVEL SHIFTER         |
++-----------------------------------------------------------------------------------+
+
+      ARDUINO UNO (5V Logic)                          ESP32-CAM AI-THINKER (3.3V)
+    +--------------------+                             +--------------------+
+    |                    |                             |                    |
+    |            Pin 11  |----[ 1kΩ Resistor ]----+----| U0R / GPIO 3 (RX)   |
+    |              (TX)  |                        |    |                    |
+    |                    |                 [ 2kΩ Resistor ]                 |
+    |                    |                        |    |                    |
+    |            Pin 10  |<-----------------------+----| U0T / GPIO 1 (TX)   |
+    |              (RX)  |   (Direct 3.3V -> 5V is OK) |                    |
+    |                    |                             |                    |
+    |               GND  |-----------------------------| GND (Pin next to 5V)|
+    |                    |       COMMON GROUND         |                    |
+    +--------------------+                             +--------------------+
+
+    CRITICAL LEVEL SHIFTING NOTE:
+    * Arduino Uno digital pins output 5V. ESP32-CAM GPIOs are strictly 3.3V rated.
+    * The 1kΩ / 2kΩ voltage divider reduces Arduino TX (5V) down to ~3.33V:
+      Vout = 5.0V * (2kΩ / (1kΩ + 2kΩ)) = 3.33V (Safe for ESP32 U0R).
+    * ESP32-CAM TX outputs 3.3V, which connects directly to Arduino Uno Pin 10 (RX).
+    * Arduino GND and ESP32-CAM GND MUST be connected together!
+</pre>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="mt-6 pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs mono">
+        <div class="text-slate-400">
+          Complete offline guide: <span class="text-cyan-300 font-semibold">minisatellite/CONNECTION_DIAGRAM.md</span>
+        </div>
+        <button onclick="toggleWiringModal()" class="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all shadow-lg shadow-cyan-950">
+          CLOSE TERMINAL
+        </button>
+      </div>
+
+    </div>
+  </div>
 </body>
 </html>
