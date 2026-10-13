@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAT-LINK // Orbital Telemetry Terminal</title>
+  <!-- Google Fonts & Tailwind CDN & Chart.js -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Chakra Petch', sans-serif;
+      background-color: #030712;
+      background-image: 
+        radial-gradient(ellipse 80% 60% at 50% -20%, rgba(14, 165, 233, 0.18), transparent 70%),
+        radial-gradient(circle at 10% 90%, rgba(99, 102, 241, 0.12), transparent 40%),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .glow-cyan {
+      box-shadow: 0 0 20px -3px rgba(6, 182, 212, 0.35);
+    }
+    .glow-badge {
+      box-shadow: 0 0 8px 1px rgba(34, 197, 94, 0.4);
+    }
+    html, body {
+      overflow-x: hidden;
+      overflow-y: auto;
+      min-height: 100%;
+    }
+    .scanline {
+      position: relative;
+    }
+    .scanline::after {
+      content: " ";
+      display: block;
+      position: fixed;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+      background-size: 100% 4px;
+      z-index: 999;
+      pointer-events: none;
+      opacity: 0.35;
+    }
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.95); }
+    }
+    .status-pulse {
+      animation: pulse-slow 2s infinite ease-in-out;
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #0b0f19; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+  </style>
+</head>
+<body class="text-slate-100 min-h-screen p-3 md:p-6 scanline flex flex-col justify-between overflow-y-auto">
+
+  <!-- Main Container -->
+  <div class="max-w-7xl mx-auto w-full">
+    
+    <!-- Top Header: Mission Control Bar -->
+    <header class="bg-slate-900/80 backdrop-blur-md border border-cyan-500/30 rounded-2xl p-4 md:p-5 mb-6 shadow-2xl relative">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        
+        <!-- Left: Satellite Identity -->
+        <div class="flex items-center space-x-4">
+          <div class="relative flex items-center justify-center w-12 h-12 rounded-xl bg-cyan-950/70 border border-cyan-400/40 text-cyan-400">
+            <svg class="w-7 h-7 animate-spin" style="animation-duration: 20s;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" stroke-width="1.5" stroke-dasharray="4 2"></circle>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v3m0 12v3M3 12h3m12 0h3m-4.5-6.5l2-2m-11 11l2-2m0-7l-2-2m11 11l-2-2"></path>
+            </svg>
+            <span class="absolute -top-1 -right-1 flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+            </span>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="text-xs px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono tracking-wider font-semibold">LEO-SAT // BUS-04</span>
+              <span class="text-xs text-slate-400 mono hidden sm:inline">NORAD #54921</span>
+            </div>
+            <h1 class="text-xl md:text-2xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-200 to-indigo-400">
+              ORBITAL THERMAL TELEMETRY STATION
+            </h1>
+          </div>
+        </div>
+
+        <!-- Right: Status Indicators & Time -->
+        <div class="flex flex-wrap items-center gap-3 text-xs mono">
+          <div class="bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2">
+            <span id="conn-indicator" class="w-2.5 h-2.5 rounded-full bg-emerald-400 glow-badge status-pulse"></span>
+            <span id="conn-text" class="text-emerald-400 font-medium">LINK ACTIVE</span>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 text-slate-300">
+            <span class="text-slate-500">PACKETS:</span> <span id="pkt-count" class="text-cyan-300 font-bold">0</span>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 text-slate-300">
+            <span class="text-slate-500">UTC CLOCK:</span> <span id="utc-clock" class="text-amber-400 font-bold">00:00:00 UTC</span>
+          </div>
+
+          <button id="mode-toggle" onclick="toggleDataMode()" class="bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 px-3 py-2 rounded-lg transition-all duration-150">
+            MODE: <span id="mode-label" class="font-bold text-white">LIVE</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Micro Status Bar -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-800/80 text-[11px] mono text-slate-400">
+        <div>ORBIT ALT: <span class="text-slate-200 font-semibold">524.2 KM</span></div>
+        <div>INCLINATION: <span class="text-slate-200 font-semibold">51.64°</span></div>
+        <div>RF LINK: <span class="text-emerald-400 font-semibold">437.450 MHz (S-BAND)</span></div>
+        <div>TEMP DRIFT: <span id="drift-val" class="text-cyan-300 font-semibold">STABLE (&plusmn;0.2°C)</span></div>
+      </div>
+    </header>
+
+    <!-- ESP32 Telemetry Downlink Control Bar (10-Second Telemetry Sync) -->
+    <div class="bg-slate-900/80 backdrop-blur-md border border-cyan-500/30 rounded-2xl p-4 mb-6 shadow-2xl relative">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 font-mono text-xs">
+        
+        <!-- Left: Device Downlink Input & Controls -->
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex items-center space-x-2 bg-cyan-950/70 border border-cyan-500/40 px-2.5 py-1.5 rounded-lg text-cyan-300 font-semibold">
+            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+            <span>ESP32 HOST IP:</span>
+          </div>
+          
+          <input id="esp-url-input" type="text" placeholder="192.168.1.x or /data" 
+            class="bg-slate-950 border border-slate-700 focus:border-cyan-400 text-slate-100 px-3 py-1.5 rounded-lg focus:outline-none w-48 sm:w-64 tracking-wider placeholder-slate-600 transition-colors">
+          
+          <button onclick="applyEspUrl()" class="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition-all shadow-md shadow-cyan-950 flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            <span>CONNECT</span>
+          </button>
+
+          <button onclick="pollNow()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition-all flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span>FETCH NOW</span>
+          </button>
+        </div>
+
+        <!-- Right: 10s Countdown, Sync Status & Latency -->
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- 10s Countdown Progress Indicator -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-1.5 flex items-center space-x-2">
+            <span class="text-slate-500">CYCLE:</span>
+            <span class="text-slate-300 font-semibold">10s</span>
+            <div class="w-px h-3 bg-slate-800"></div>
+            <span class="text-slate-500">NEXT:</span>
+            <span id="countdown-badge" class="text-cyan-400 font-bold w-12 text-center">10s</span>
+            <div class="w-14 h-1.5 bg-slate-800 rounded-full overflow-hidden ml-1">
+              <div id="countdown-progress" class="h-full bg-cyan-400 rounded-full transition-all duration-1000 ease-linear" style="width: 100%;"></div>
+            </div>
+          </div>
+
+          <!-- Last Packet Timestamp -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-300">
+            <span class="text-slate-500">LAST SYNC:</span> <span id="last-sync-time" class="text-emerald-400 font-bold">--:--:--</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Subsystem Telemetry Cards (Summary Bar) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      
+      <!-- T1 Payload Core -->
+      <div class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-rose-500 border border-slate-800/90 hover:border-rose-500/50 transition-all duration-200">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">T1 // SENSOR</span>
+          <span class="px-1.5 py-0.5 rounded bg-rose-950/60 text-rose-300 text-[10px] mono border border-rose-800/50">OBC CORE</span>
+        </div>
+        <div class="flex items-baseline justify-between mt-1">
+          <p id="val-t1" class="text-3xl font-bold font-mono text-rose-400">--°C</p>
+          <span id="stat-t1" class="text-[11px] font-mono text-emerald-400">NOMINAL</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+          <span>LIMIT: &minus;20°C ~ +85°C</span>
+          <span id="rate-t1" class="text-slate-400">0.0°/s</span>
+        </div>
+      </div>
+
+      <!-- T2 Solar Array -->
+      <div class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-emerald-500 border border-slate-800/90 hover:border-emerald-500/50 transition-all duration-200">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">T2 // SENSOR</span>
+          <span class="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 text-[10px] mono border border-emerald-800/50">SOLAR ARRAY</span>
+        </div>
+        <div class="flex items-baseline justify-between mt-1">
+          <p id="val-t2" class="text-3xl font-bold font-mono text-emerald-400">--°C</p>
+          <span id="stat-t2" class="text-[11px] font-mono text-emerald-400">NOMINAL</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+          <span>LIMIT: &minus;40°C ~ +110°C</span>
+          <span id="rate-t2" class="text-slate-400">0.0°/s</span>
+        </div>
+      </div>
+
+      <!-- T3 Battery Module -->
+      <div class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-cyan-500 border border-slate-800/90 hover:border-cyan-500/50 transition-all duration-200">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">T3 // SENSOR</span>
+          <span class="px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 text-[10px] mono border border-cyan-800/50">EPS BATTERY</span>
+        </div>
+        <div class="flex items-baseline justify-between mt-1">
+          <p id="val-t3" class="text-3xl font-bold font-mono text-cyan-400">--°C</p>
+          <span id="stat-t3" class="text-[11px] font-mono text-emerald-400">OPTIMAL</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+          <span>LIMIT: 0°C ~ +45°C</span>
+          <span id="rate-t3" class="text-slate-400">0.0°/s</span>
+        </div>
+      </div>
+
+      <!-- T4 External Radiator -->
+      <div class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-amber-500 border border-slate-800/90 hover:border-amber-500/50 transition-all duration-200">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">T4 // SENSOR</span>
+          <span class="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 text-[10px] mono border border-amber-800/50">RADIATOR PANEL</span>
+        </div>
+        <div class="flex items-baseline justify-between mt-1">
+          <p id="val-t4" class="text-3xl font-bold font-mono text-amber-400">--°C</p>
+          <span id="stat-t4" class="text-[11px] font-mono text-emerald-400">NOMINAL</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+          <span>LIMIT: &minus;60°C ~ +70°C</span>
+          <span id="rate-t4" class="text-slate-400">0.0°/s</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- CAMERA & OPTICAL RECONNAISSANCE SECTION -->
+    <div class="bg-slate-900/80 backdrop-blur-md p-4 md:p-5 rounded-2xl border border-cyan-500/30 shadow-2xl mb-6 relative">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-800 gap-2">
+        <div class="flex items-center space-x-3">
+          <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+          </span>
+          <h2 class="font-bold tracking-wider text-sm md:text-base text-cyan-300 font-mono">
+            OPTICAL DOWNLINK // CAM-01 NADIR EARTH RECON
+          </h2>
+          <span class="text-[10px] mono px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-semibold tracking-wider">LIVE FEED</span>
+        </div>
+
+        <div class="flex items-center space-x-2 text-xs mono">
+          <input id="cam-url-input" type="text" placeholder="/cam (or /stream / jpg url)" value="/cam" 
+            class="bg-slate-950 border border-slate-700 text-slate-200 px-2 py-1 rounded text-xs focus:outline-none focus:border-cyan-400 w-36 sm:w-48">
+          <button onclick="applyCamUrl()" class="px-2.5 py-1 rounded bg-cyan-950 border border-cyan-500/50 hover:bg-cyan-900 text-cyan-300 text-xs">
+            APPLY
+          </button>
+          <button onclick="reloadCamFeed()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs">
+            RELOAD
+          </button>
+        </div>
+      </div>
+
+      <!-- Video / Camera Display Viewport with Sci-Fi HUD Overlay -->
+      <div class="relative w-full h-64 sm:h-80 md:h-96 rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center">
+        <!-- Live Image Feed -->
+        <img id="satellite-camera" 
+          src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80" 
+          alt="Satellite Nadir Optical Feed"
+          onerror="handleCamError()"
+          class="w-full h-full object-cover transition-opacity duration-300">
+
+        <!-- HUD Targeting Crosshairs & Reticle Overlay -->
+        <div class="absolute inset-0 pointer-events-none p-4 flex flex-col justify-between">
+          
+          <!-- Top Overlay: Timecode & Resolution -->
+          <div class="flex justify-between items-start text-[11px] mono">
+            <div class="bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded border border-cyan-500/40 text-cyan-300">
+              FOV: 84.5° // SENSOR: OV2640 // EXPOSURE: AUTO
+            </div>
+            <div class="bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded border border-emerald-500/40 text-emerald-400 font-bold">
+              REC ● <span id="cam-timestamp">00:00:00.00</span>
+            </div>
+          </div>
+
+          <!-- Center Crosshair Reticle -->
+          <div class="absolute inset-0 flex items-center justify-center">
+            <div class="w-24 h-24 border border-cyan-400/40 rounded-full flex items-center justify-center relative">
+              <div class="w-1.5 h-1.5 bg-cyan-400 rounded-full"></div>
+              <div class="absolute w-8 h-[1px] bg-cyan-400/70 -left-4"></div>
+              <div class="absolute w-8 h-[1px] bg-cyan-400/70 -right-4"></div>
+              <div class="absolute h-8 w-[1px] bg-cyan-400/70 -top-4"></div>
+              <div class="absolute h-8 w-[1px] bg-cyan-400/70 -bottom-4"></div>
+            </div>
+          </div>
+
+          <!-- Bottom Overlay: Target Coordinates & Status -->
+          <div class="flex justify-between items-end text-[11px] mono">
+            <div class="bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded border border-slate-700 text-slate-300">
+              TARGET: LAT 28°36'N // LON 80°36'W (CAPE CANAVERAL PASS)
+            </div>
+            <div class="bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded border border-slate-700 text-slate-400">
+              FPS: <span id="cam-fps" class="text-cyan-300 font-bold">10.0</span> // BITRATE: 1.4 Mbps
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 SEPARATE TEMPERATURE CHARTS (2x2 Grid) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+
+      <!-- Chart 1: OBC Processor Core -->
+      <div class="bg-slate-900/80 backdrop-blur-md p-5 rounded-2xl border border-slate-800 shadow-xl relative">
+        <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-800/80">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-sm bg-rose-500 inline-block shadow-sm shadow-rose-500/50"></span>
+            <h2 class="font-semibold tracking-wide text-sm md:text-base text-rose-300">CHANNEL 1 : OBC PROCESSOR &amp; COMMS</h2>
+          </div>
+          <span class="text-xs font-mono text-rose-400/90 bg-rose-950/50 px-2 py-0.5 rounded border border-rose-800/30">DS18B20 #1</span>
+        </div>
+        <div class="h-64 w-full">
+          <canvas id="chart-t1"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Solar Panel Primary -->
+      <div class="bg-slate-900/80 backdrop-blur-md p-5 rounded-2xl border border-slate-800 shadow-xl relative">
+        <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-800/80">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-sm bg-emerald-500 inline-block shadow-sm shadow-emerald-500/50"></span>
+            <h2 class="font-semibold tracking-wide text-sm md:text-base text-emerald-300">CHANNEL 2 : SOLAR ARRAY &amp; CELL BANK</h2>
+          </div>
+          <span class="text-xs font-mono text-emerald-400/90 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/30">DS18B20 #2</span>
+        </div>
+        <div class="h-64 w-full">
+          <canvas id="chart-t2"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 3: Power Distribution / LiFePO4 Battery -->
+      <div class="bg-slate-900/80 backdrop-blur-md p-5 rounded-2xl border border-slate-800 shadow-xl relative">
+        <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-800/80">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-sm bg-cyan-400 inline-block shadow-sm shadow-cyan-400/50"></span>
+            <h2 class="font-semibold tracking-wide text-sm md:text-base text-cyan-300">CHANNEL 3 : EPS BATTERY PACK ENCLOSURE</h2>
+          </div>
+          <span class="text-xs font-mono text-cyan-400/90 bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-800/30">DS18B20 #3</span>
+        </div>
+        <div class="h-64 w-full">
+          <canvas id="chart-t3"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 4: Thermal Dissipation Radiator -->
+      <div class="bg-slate-900/80 backdrop-blur-md p-5 rounded-2xl border border-slate-800 shadow-xl relative">
+        <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-800/80">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-sm bg-amber-400 inline-block shadow-sm shadow-amber-400/50"></span>
+            <h2 class="font-semibold tracking-wide text-sm md:text-base text-amber-300">CHANNEL 4 : HULL DEPLOYABLE RADIATOR</h2>
+          </div>
+          <span class="text-xs font-mono text-amber-400/90 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/30">DS18B20 #4</span>
+        </div>
+        <div class="h-64 w-full">
+          <canvas id="chart-t4"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 3D ROTATING SATELLITE THERMAL SLAB (15cm x 15cm x 0.5cm HEATMAP) -->
+    <div class="bg-slate-900/80 backdrop-blur-md p-4 md:p-6 rounded-2xl border border-cyan-500/30 shadow-2xl mb-6 relative">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-slate-800 gap-2">
+        <div class="flex items-center space-x-3">
+          <span class="w-3 h-3 rounded bg-indigo-500 animate-pulse"></span>
+          <div>
+            <h2 class="font-bold tracking-wider text-sm md:text-base text-cyan-300 font-mono">
+              3D ORBITAL CHASSIS // THERMAL HEAT MAP (15cm × 15cm × 0.5cm)
+            </h2>
+            <p class="text-[11px] text-slate-400 font-mono">
+              SATELLITE BUS SURFACE TEMPERATURE GRADIENT MATRIX [T1, T2, T3, T4]
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2 text-xs font-mono">
+          <button id="slab-rot-toggle" onclick="toggleSlabRotation()" class="px-3 py-1.5 rounded bg-cyan-950 border border-cyan-500/40 hover:bg-cyan-900 text-cyan-300">
+            ROTATION: <span id="rot-state" class="font-bold text-emerald-400">ON</span>
+          </button>
+          <button onclick="resetSlabAngle()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">
+            RESET ANGLE
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Visual Container -->
+      <div class="flex flex-col lg:flex-row items-center justify-between gap-6">
+        
+        <!-- 3D Perspective Stage -->
+        <div class="w-full lg:w-2/3 h-72 sm:h-80 flex items-center justify-center relative overflow-hidden bg-slate-950/80 rounded-xl border border-slate-800/80" style="perspective: 900px;">
+          
+          <!-- Background Grid & Orbital Reticle -->
+          <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+            <div class="w-64 h-64 border border-dashed border-cyan-400 rounded-full"></div>
+            <div class="w-48 h-48 border border-slate-600 rounded-full absolute"></div>
+            <div class="w-full h-[1px] bg-cyan-500/30 absolute"></div>
+            <div class="h-full w-[1px] bg-cyan-500/30 absolute"></div>
+          </div>
+
+          <!-- The 3D Rotating Square Slab Container (15cm x 15cm, height 0.5cm) -->
+          <div id="thermal-slab" class="relative" style="width: 15cm; height: 15cm; max-width: 260px; max-height: 260px; transform-style: preserve-3d; transform: rotateX(60deg) rotateZ(35deg); transition: box-shadow 0.3s ease;">
+            
+            <!-- Top Face with 4-Quadrant Dynamic Canvas Heatmap -->
+            <div class="absolute inset-0 rounded-lg overflow-hidden border border-slate-400/40 shadow-2xl flex flex-col justify-between" 
+                 style="transform: translateZ(calc(0.5cm / 2)); background: #030712;">
+              <canvas id="heatmap-canvas" width="260" height="260" class="w-full h-full block"></canvas>
+              
+              <!-- Quadrant Sensor Marker Badges -->
+              <div class="absolute inset-0 pointer-events-none p-2 flex flex-col justify-between font-mono text-[10px] font-bold">
+                <div class="flex justify-between">
+                  <span class="bg-black/60 px-1.5 py-0.5 rounded text-rose-300 border border-rose-500/30">T1: OBC</span>
+                  <span class="bg-black/60 px-1.5 py-0.5 rounded text-emerald-300 border border-emerald-500/30">T2: SOLAR</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="bg-black/60 px-1.5 py-0.5 rounded text-cyan-300 border border-cyan-500/30">T3: BATT</span>
+                  <span class="bg-black/60 px-1.5 py-0.5 rounded text-amber-300 border border-amber-500/30">T4: RAD</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bottom Face -->
+            <div class="absolute inset-0 rounded-lg bg-slate-900 border border-slate-700/60" 
+                 style="transform: translateZ(calc(-0.5cm / 2)) rotateY(180deg);">
+            </div>
+
+            <!-- Front Side (0.5cm height) -->
+            <div class="absolute left-0 right-0 top-0 bg-slate-800/95 border-t border-b border-cyan-500/40" 
+                 style="height: 0.5cm; transform-origin: top; transform: rotateX(90deg) translateZ(0);">
+            </div>
+
+            <!-- Back Side (0.5cm height) -->
+            <div class="absolute left-0 right-0 bottom-0 bg-slate-900 border-t border-b border-slate-700" 
+                 style="height: 0.5cm; transform-origin: bottom; transform: rotateX(-90deg) translateZ(0);">
+            </div>
+
+            <!-- Left Side (0.5cm height) -->
+            <div class="absolute top-0 bottom-0 left-0 bg-slate-800/90 border-l border-r border-slate-700" 
+                 style="width: 0.5cm; transform-origin: left; transform: rotateY(-90deg) translateZ(0);">
+            </div>
+
+            <!-- Right Side (0.5cm height) -->
+            <div class="absolute top-0 bottom-0 right-0 bg-slate-800/90 border-l border-r border-slate-700" 
+                 style="width: 0.5cm; transform-origin: right; transform: rotateY(90deg) translateZ(0);">
+            </div>
+
+          </div>
+
+          <!-- Real-Time Dimension Tag -->
+          <div class="absolute bottom-3 left-3 bg-black/70 px-2 py-1 rounded text-[10px] font-mono border border-slate-700 text-slate-300">
+            SPECS: 15.0 × 15.0 cm | H: 0.5 cm (AL-6061-T6 SLAB)
+          </div>
+
+          <div class="absolute bottom-3 right-3 bg-black/70 px-2 py-1 rounded text-[10px] font-mono border border-slate-700 text-cyan-300">
+            YAW: <span id="slab-angle-readout">0°</span>
+          </div>
+
+        </div>
+
+        <!-- Heat Map Palette Scale & Quadrant Inspector -->
+        <div class="w-full lg:w-1/3 flex flex-col justify-between space-y-4">
+          
+          <!-- Heatmap Temperature Color Legend -->
+          <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+            <h3 class="text-xs font-mono font-bold text-slate-300 mb-2 flex items-center justify-between">
+              <span>THERMAL SPECTRUM PALETTE</span>
+              <span class="text-[10px] text-cyan-400 font-normal">BLUE &rarr; ORANGE &rarr; RED</span>
+            </h3>
+            
+            <!-- Spectrum Bar (Blue -> Orange -> Red) -->
+            <div class="w-full h-3.5 rounded-full overflow-hidden border border-slate-700 shadow-inner" 
+                 style="background: linear-gradient(to right, #2563eb 0%, #38bdf8 30%, #f97316 65%, #ef4444 100%);">
+            </div>
+
+            <div class="flex justify-between text-[10px] font-mono text-slate-400 mt-1">
+              <span>COLD (&le; 10°C)</span>
+              <span>NOMINAL (25°C)</span>
+              <span>WARM (40°C)</span>
+              <span>HOT (&ge; 60°C)</span>
+            </div>
+          </div>
+
+          <!-- Quadrant Value Readouts on the 15x15cm plate -->
+          <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-rose-900/40 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-slate-400">QUAD-1 (OBC)</div>
+                <div id="plate-val-t1" class="text-sm font-bold text-rose-400">--°C</div>
+              </div>
+              <span id="plate-color-t1" class="w-3.5 h-3.5 rounded-full border border-white/20"></span>
+            </div>
+
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-emerald-900/40 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-slate-400">QUAD-2 (SOLAR)</div>
+                <div id="plate-val-t2" class="text-sm font-bold text-emerald-400">--°C</div>
+              </div>
+              <span id="plate-color-t2" class="w-3.5 h-3.5 rounded-full border border-white/20"></span>
+            </div>
+
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-cyan-900/40 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-slate-400">QUAD-3 (BATT)</div>
+                <div id="plate-val-t3" class="text-sm font-bold text-cyan-400">--°C</div>
+              </div>
+              <span id="plate-color-t3" class="w-3.5 h-3.5 rounded-full border border-white/20"></span>
+            </div>
+
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-amber-900/40 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-slate-400">QUAD-4 (RAD)</div>
+                <div id="plate-val-t4" class="text-sm font-bold text-amber-400">--°C</div>
+              </div>
+              <span id="plate-color-t4" class="w-3.5 h-3.5 rounded-full border border-white/20"></span>
+            </div>
+          </div>
+
+          <!-- Heat Flux Summary -->
+          <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-400 space-y-1">
+            <div class="flex justify-between">
+              <span>THERMAL GRADIENT:</span>
+              <span id="thermal-delta" class="text-slate-200 font-bold">--°C &Delta;T</span>
+            </div>
+            <div class="flex justify-between">
+              <span>AVG SURFACE TEMP:</span>
+              <span id="thermal-avg" class="text-cyan-300 font-bold">--°C</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Mission Event Log Console -->
+    <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 font-mono text-xs shadow-inner">
+      <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+        <div class="flex items-center space-x-2 text-slate-400">
+          <span class="inline-block w-2 h-2 rounded-full bg-cyan-400"></span>
+          <span class="font-semibold tracking-wider text-slate-200">GROUND STATION TELEMETRY LOG</span>
+        </div>
+        <span class="text-[10px] text-slate-500">AUTO-SCROLL ENABLED</span>
+      </div>
+      <div id="telemetry-log" class="h-28 overflow-y-auto space-y-1 text-slate-400 pr-2">
+        <div><span class="text-slate-600">[SYS_INIT]</span> Telemetry ground terminal initialized. Ready for ESP32 downlink stream...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="mt-8 text-center text-xs font-mono text-slate-600">
+    SAT-LINK TELEMETRY PROTOCOL v2.4 // ESP32 WEBSERVER INTERFACE // ALL SYSTEMS OPERATIONAL
+  </footer>
+
+  <!-- SCRIPT LOGIC -->
+  <script>
+    // Max data history points per chart
+    const MAX_POINTS = 25;
+    let packetCount = 0;
+    let simulationMode = false;
+    let failCount = 0;
+
+    // 10-Second Telemetry Sync Cycle
+    const POLL_INTERVAL = 10; // seconds
+    let countdownSeconds = POLL_INTERVAL;
+    let pollIntervalTimer = null;
+    let countdownIntervalTimer = null;
+    let activeEspUrl = '';
+    let isFetching = false;
+
+    // Previous values to calculate rate of change
+    let prevValues = { t1: null, t2: null, t3: null, t4: null };
+
+    // Common chart options builder for futuristic sci-fi look
+    function createChartConfig(color, gradientStart, gradientEnd, label) {
+      return {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: label,
+            data: [],
+            borderColor: color,
+            backgroundColor: function(context) {
+              const chart = context.chart;
+              const {ctx, chartArea} = chart;
+              if (!chartArea) return null;
+              const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+              gradient.addColorStop(0, gradientStart);
+              gradient.addColorStop(1, gradientEnd);
+              return gradient;
+            },
+            fill: true,
+            borderWidth: 2,
+            tension: 0.35,
+            pointRadius: 2.5,
+            pointHoverRadius: 6,
+            pointBackgroundColor: color,
+            pointBorderColor: '#0f172a',
+            pointBorderWidth: 1.5,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 400 },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(15, 23, 42, 0.95)',
+              titleFont: { family: 'JetBrains Mono', size: 11 },
+              bodyFont: { family: 'JetBrains Mono', size: 12 },
+              borderColor: color,
+              borderWidth: 1,
+              padding: 10,
+              displayColors: false,
+              callbacks: {
+                label: function(context) {
+                  return `TEMP: ${context.parsed.y.toFixed(2)} °C`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(51, 65, 85, 0.3)' },
+              ticks: { 
+                color: '#64748b', 
+                font: { family: 'JetBrains Mono', size: 10 },
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 6
+              }
+            },
+            y: {
+              grid: { color: 'rgba(51, 65, 85, 0.35)' },
+              ticks: { 
+                color: '#94a3b8', 
+                font: { family: 'JetBrains Mono', size: 10 },
+                callback: function(v) { return v + '°C'; }
+              }
+            }
+          }
+        }
+      };
+    }
+
+    // Initialize the 4 individual charts
+    const chart1 = new Chart(
+      document.getElementById('chart-t1').getContext('2d'),
+      createChartConfig('#f43f5e', 'rgba(244, 63, 94, 0.35)', 'rgba(244, 63, 94, 0.0)', 'OBC Processor')
+    );
+
+    const chart2 = new Chart(
+      document.getElementById('chart-t2').getContext('2d'),
+      createChartConfig('#10b981', 'rgba(16, 185, 129, 0.35)', 'rgba(16, 185, 129, 0.0)', 'Solar Array')
+    );
+
+    const chart3 = new Chart(
+      document.getElementById('chart-t3').getContext('2d'),
+      createChartConfig('#06b6d4', 'rgba(6, 182, 212, 0.35)', 'rgba(6, 182, 212, 0.0)', 'EPS Battery')
+    );
+
+    const chart4 = new Chart(
+      document.getElementById('chart-t4').getContext('2d'),
+      createChartConfig('#f59e0b', 'rgba(245, 158, 11, 0.35)', 'rgba(245, 158, 11, 0.0)', 'Hull Radiator')
+    );
+
+    const charts = [chart1, chart2, chart3, chart4];
+
+    // Append message to mission log
+    function logTelemetry(type, msg, isAlert = false) {
+      const logBox = document.getElementById('telemetry-log');
+      const timeStr = new Date().toISOString().substring(11, 19);
+      const color = isAlert ? 'text-rose-400' : 'text-slate-400';
+      const div = document.createElement('div');
+      div.className = color;
+      div.innerHTML = `<span class="text-slate-600">[${timeStr}]</span> <span class="text-cyan-400 font-semibold">[${type}]</span> ${msg}`;
+      logBox.appendChild(div);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // Clock updater
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('utc-clock').innerText = now.toUTCString().slice(17, 25) + ' UTC';
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Toggle Live vs Sim
+    function toggleDataMode() {
+      simulationMode = !simulationMode;
+      const label = document.getElementById('mode-label');
+      label.innerText = simulationMode ? 'SIMULATED' : 'LIVE';
+      label.className = simulationMode ? 'font-bold text-amber-300' : 'font-bold text-emerald-300';
+      logTelemetry('MODE_CHG', `Switched telemetry downlink source to ${simulationMode ? 'SYNTHETIC ORBIT SIMULATOR' : 'LIVE ESP32 SENSORS'}.`);
+    }
+
+    // Synthetic data generator mimicking realistic space flight fluctuations
+    let simBase = { t1: 38.5, t2: 45.0, t3: 22.4, t4: -5.2 };
+    function getSimulatedData() {
+      simBase.t1 += (Math.random() - 0.48) * 0.4;
+      simBase.t2 += (Math.random() - 0.49) * 0.7;
+      simBase.t3 += (Math.random() - 0.50) * 0.2;
+      simBase.t4 += (Math.random() - 0.50) * 0.5;
+      return {
+        t1: parseFloat(simBase.t1.toFixed(2)),
+        t2: parseFloat(simBase.t2.toFixed(2)),
+        t3: parseFloat(simBase.t3.toFixed(2)),
+        t4: parseFloat(simBase.t4.toFixed(2))
+      };
+    }
+
+    // Camera controls & fallbacks
+    const defaultCamImage = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80';
+    let activeCamUrl = '/cam';
+
+    function applyCamUrl() {
+      const input = document.getElementById('cam-url-input');
+      const camImg = document.getElementById('satellite-camera');
+      activeCamUrl = input.value.trim() || '/cam';
+      camImg.src = activeCamUrl + '?t=' + Date.now();
+      logTelemetry('OPTICAL_CFG', `Camera downlink pointing updated to: ${activeCamUrl}`);
+    }
+
+    function reloadCamFeed() {
+      const camImg = document.getElementById('satellite-camera');
+      camImg.src = (activeCamUrl || '/cam') + '?t=' + Date.now();
+      logTelemetry('OPTICAL_SYNC', 'Refreshed optical telemetry camera buffer.');
+    }
+
+    function handleCamError() {
+      const camImg = document.getElementById('satellite-camera');
+      // If local /cam endpoint is not responding, fallback to orbital Earth photo
+      if (camImg.src !== defaultCamImage) {
+        logTelemetry('OPTICAL_WARN', 'Live feed endpoint unavailable. Fallback to cached orbital snapshot.', true);
+        camImg.src = defaultCamImage;
+      }
+    }
+
+    // Camera HUD live millisecond timecode
+    function updateCamTimestamp() {
+      const now = new Date();
+      const timeStr = now.toISOString().substring(11, 22);
+      const camTs = document.getElementById('cam-timestamp');
+      if (camTs) camTs.innerText = timeStr;
+    }
+    setInterval(updateCamTimestamp, 100);
+
+    // Rate of change calculation (per 10-second interval)
+    function updateRate(id, current, prev) {
+      if (prev === null) return;
+      const diff = (current - prev) / 10.0; // 10s interval
+      const el = document.getElementById(id);
+      const sign = diff >= 0 ? '+' : '';
+      el.innerText = `${sign}${diff.toFixed(2)}°/s`;
+      el.className = Math.abs(diff) > 0.4 ? 'text-amber-400 font-semibold' : 'text-slate-400';
+    }
+
+    // Push new reading to a chart
+    function pushDataToChart(targetChart, timeLabel, value) {
+      if (targetChart.data.labels.length >= MAX_POINTS) {
+        targetChart.data.labels.shift();
+        targetChart.data.datasets[0].data.shift();
+      }
+      targetChart.data.labels.push(timeLabel);
+      targetChart.data.datasets[0].data.push(value);
+      targetChart.update();
+    }
+
+    // -------------------------------------------------------------------------
+    // ESP32 DOWNLINK 10-SECOND POLLING ENGINE
+    // -------------------------------------------------------------------------
+    function getFullEspDataUrl() {
+      let url = activeEspUrl.trim();
+      if (!url) {
+        if (window.location.protocol.startsWith('http')) {
+          return '/data';
+        }
+        return '';
+      }
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url.endsWith('/data') ? url : (url.endsWith('/') ? url + 'data' : url + '/data');
+      }
+      if (url.startsWith('/')) {
+        return url;
+      }
+      // If user provided raw IP like "192.168.1.184"
+      return `http://${url}/data`;
+    }
+
+    function applyEspUrl() {
+      const input = document.getElementById('esp-url-input');
+      if (!input) return;
+      activeEspUrl = input.value.trim();
+      localStorage.setItem('esp32_url', activeEspUrl);
+      logTelemetry('CONFIG_UPD', `ESP32 Target URL configured to: ${getFullEspDataUrl()}`);
+      pollNow();
+    }
+
+    function updateCountdownUI() {
+      const badge = document.getElementById('countdown-badge');
+      const progress = document.getElementById('countdown-progress');
+      if (badge) {
+        badge.innerText = isFetching ? 'SYNC...' : `${countdownSeconds}s`;
+        badge.className = isFetching ? 'text-amber-300 font-bold w-12 text-center animate-pulse' : 'text-cyan-400 font-bold w-12 text-center';
+      }
+      if (progress) {
+        const pct = Math.max(0, Math.min(100, (countdownSeconds / POLL_INTERVAL) * 100));
+        progress.style.width = `${pct}%`;
+      }
+    }
+
+    function pollNow() {
+      countdownSeconds = POLL_INTERVAL;
+      updateCountdownUI();
+      fetchData();
+    }
+
+    function evalSensorStatus(temp, minNominal, maxNominal) {
+      if (temp < minNominal || temp > maxNominal) {
+        return { text: 'CRITICAL', class: 'text-[11px] font-mono text-rose-400 font-bold' };
+      }
+      if (temp < minNominal + 5 || temp > maxNominal - 5) {
+        return { text: 'CAUTION', class: 'text-[11px] font-mono text-amber-400 font-medium' };
+      }
+      return { text: 'NOMINAL', class: 'text-[11px] font-mono text-emerald-400 font-medium' };
+    }
+
+    // Main telemetry fetch loop (Runs every 10 seconds)
+    async function fetchData() {
+      if (isFetching) return;
+      isFetching = true;
+      updateCountdownUI();
+
+      const connIndicator = document.getElementById('conn-indicator');
+      const connText = document.getElementById('conn-text');
+      let data = null;
+
+      if (!simulationMode) {
+        const targetUrl = getFullEspDataUrl();
+        if (!targetUrl) {
+          isFetching = false;
+          countdownSeconds = POLL_INTERVAL;
+          updateCountdownUI();
+          if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 status-pulse';
+          if (connText) {
+            connText.className = 'text-amber-400 font-medium';
+            connText.innerText = 'NO IP SET';
+          }
+          logTelemetry('LINK_WAIT', 'Waiting for ESP32 IP address. Enter IP in the box above and click CONNECT.', true);
+          return;
+        }
+
+        try {
+          const startTime = performance.now();
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
+
+          const response = await fetch(targetUrl, {
+            method: 'GET',
+            cache: 'no-store',
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status} ${response.statusText}`);
+          }
+
+          data = await response.json();
+          const roundTripMs = Math.round(performance.now() - startTime);
+
+          failCount = 0;
+          if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 glow-badge status-pulse';
+          if (connText) {
+            connText.className = 'text-emerald-400 font-medium';
+            connText.innerText = `LINK ACTIVE (${roundTripMs}ms)`;
+          }
+
+          applyTelemetryData(data, roundTripMs);
+
+        } catch (err) {
+          failCount++;
+          const reason = err.name === 'AbortError' ? 'Connection timed out (6s)' : err.message;
+          logTelemetry('NET_ERR', `Cannot reach ESP32 at ${targetUrl}: ${reason}. Retrying in 10s...`, true);
+
+          if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 status-pulse';
+          if (connText) {
+            connText.className = 'text-rose-400 font-medium';
+            connText.innerText = `LINK OFFLINE (#${failCount})`;
+          }
+        }
+      } else {
+        data = getSimulatedData();
+        if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-cyan-400 status-pulse';
+        if (connText) {
+          connText.className = 'text-cyan-400 font-medium';
+          connText.innerText = 'SIM ACTIVE';
+        }
+        applyTelemetryData(data, 0);
+      }
+
+      isFetching = false;
+      countdownSeconds = POLL_INTERVAL;
+      updateCountdownUI();
+    }
+
+    // Apply received telemetry to UI, charts, and 3D heat slab
+    function applyTelemetryData(data, latencyMs) {
+      // Normalize values from ESP32 JSON
+      const t1 = parseFloat(data.t1 ?? data.temp1 ?? data.T1 ?? 0);
+      const t2 = parseFloat(data.t2 ?? data.temp2 ?? data.T2 ?? 0);
+      const t3 = parseFloat(data.t3 ?? data.temp3 ?? data.T3 ?? 0);
+      const t4 = parseFloat(data.t4 ?? data.temp4 ?? data.T4 ?? 0);
+      const cleanData = { t1, t2, t3, t4 };
+
+      const now = new Date();
+      const timeStr = now.toTimeString().substring(0, 8);
+      packetCount++;
+      document.getElementById('pkt-count').innerText = packetCount;
+
+      // Update telemetry numerical readouts
+      document.getElementById('val-t1').innerText = cleanData.t1.toFixed(1) + '°C';
+      document.getElementById('val-t2').innerText = cleanData.t2.toFixed(1) + '°C';
+      document.getElementById('val-t3').innerText = cleanData.t3.toFixed(1) + '°C';
+      document.getElementById('val-t4').innerText = cleanData.t4.toFixed(1) + '°C';
+
+      // Update Subsystem nominal/critical statuses
+      const s1 = evalSensorStatus(cleanData.t1, -20, 85);
+      const s2 = evalSensorStatus(cleanData.t2, -40, 110);
+      const s3 = evalSensorStatus(cleanData.t3, 0, 45);
+      const s4 = evalSensorStatus(cleanData.t4, -60, 70);
+      
+      const elS1 = document.getElementById('stat-t1');
+      if (elS1) { elS1.innerText = s1.text; elS1.className = s1.class; }
+      const elS2 = document.getElementById('stat-t2');
+      if (elS2) { elS2.innerText = s2.text; elS2.className = s2.class; }
+      const elS3 = document.getElementById('stat-t3');
+      if (elS3) { elS3.innerText = s3.text; elS3.className = s3.class; }
+      const elS4 = document.getElementById('stat-t4');
+      if (elS4) { elS4.innerText = s4.text; elS4.className = s4.class; }
+
+      // Update rate of change (over 10s period)
+      updateRate('rate-t1', cleanData.t1, prevValues.t1);
+      updateRate('rate-t2', cleanData.t2, prevValues.t2);
+      updateRate('rate-t3', cleanData.t3, prevValues.t3);
+      updateRate('rate-t4', cleanData.t4, prevValues.t4);
+
+      // Temperature drift calculation across 10s interval
+      if (prevValues.t1 !== null) {
+        const drift = ((cleanData.t1 - prevValues.t1) + (cleanData.t2 - prevValues.t2) + (cleanData.t3 - prevValues.t3) + (cleanData.t4 - prevValues.t4)) / 4.0;
+        const driftEl = document.getElementById('drift-val');
+        if (driftEl) {
+          const sign = drift >= 0 ? '+' : '';
+          driftEl.innerText = `${sign}${drift.toFixed(2)}°C / 10s`;
+          driftEl.className = Math.abs(drift) > 0.5 ? 'text-amber-400 font-semibold' : 'text-cyan-300 font-semibold';
+        }
+      }
+
+      prevValues = { ...cleanData };
+
+      // Push into 4 individual distinct charts
+      pushDataToChart(chart1, timeStr, cleanData.t1);
+      pushDataToChart(chart2, timeStr, cleanData.t2);
+      pushDataToChart(chart3, timeStr, cleanData.t3);
+      pushDataToChart(chart4, timeStr, cleanData.t4);
+
+      // Update 3D rotating slab heatmap & telemetry summary
+      updateHeatmapSlab(cleanData);
+
+      // Update last sync time
+      const syncEl = document.getElementById('last-sync-time');
+      if (syncEl) syncEl.innerText = timeStr;
+
+      // Periodically refresh camera if pointing at live ESP32-CAM endpoint
+      if (!simulationMode && activeCamUrl && activeCamUrl !== defaultCamImage) {
+        const camImg = document.getElementById('satellite-camera');
+        if (camImg) camImg.src = activeCamUrl + '?t=' + Date.now();
+      }
+
+      // Log 10-second telemetry packet received
+      const latencyMsg = latencyMs > 0 ? ` (${latencyMs}ms)` : '';
+      logTelemetry('DOWNLINK_10S', `T1=${cleanData.t1.toFixed(1)}°C | T2=${cleanData.t2.toFixed(1)}°C | T3=${cleanData.t3.toFixed(1)}°C | T4=${cleanData.t4.toFixed(1)}°C (Packet #${packetCount}${latencyMsg})`);
+    }
+
+    // -------------------------------------------------------------------------
+    // 3D ROTATING SLAB & 4-SENSOR HEATMAP ENGINE (Blue -> Orange -> Red)
+    // -------------------------------------------------------------------------
+    let slabAngle = 35;
+    let slabRotating = true;
+    const slabEl = document.getElementById('thermal-slab');
+    const angleReadout = document.getElementById('slab-angle-readout');
+
+    function animateSlab() {
+      if (slabRotating && slabEl) {
+        slabAngle = (slabAngle + 0.6) % 360;
+        slabEl.style.transform = `rotateX(58deg) rotateZ(${slabAngle.toFixed(1)}deg)`;
+        if (angleReadout) angleReadout.innerText = Math.round(slabAngle) + '°';
+      }
+      requestAnimationFrame(animateSlab);
+    }
+    requestAnimationFrame(animateSlab);
+
+    function toggleSlabRotation() {
+      slabRotating = !slabRotating;
+      const rotLabel = document.getElementById('rot-state');
+      rotLabel.innerText = slabRotating ? 'ON' : 'PAUSED';
+      rotLabel.className = slabRotating ? 'font-bold text-emerald-400' : 'font-bold text-amber-400';
+    }
+
+    function resetSlabAngle() {
+      slabAngle = 0;
+      if (slabEl) slabEl.style.transform = `rotateX(58deg) rotateZ(0deg)`;
+      if (angleReadout) angleReadout.innerText = '0°';
+    }
+
+    // Map temperature to color: Blue (cold) -> Orange (warm) -> Red (hot)
+    function tempToRGB(temp) {
+      // Clamped range: 0°C (Deep Blue) to 60°C (Bright Red)
+      const minT = 0;
+      const midT = 30; // Orange transition
+      const maxT = 60;
+
+      let r = 0, g = 0, b = 0;
+
+      if (temp <= midT) {
+        // Range 0 to 30: Pure Blue (37, 99, 235) -> Vibrant Orange (249, 115, 22)
+        const t = Math.max(0, Math.min(1, (temp - minT) / (midT - minT)));
+        r = Math.round(37 + (249 - 37) * t);
+        g = Math.round(99 + (115 - 99) * t);
+        b = Math.round(235 + (22 - 235) * t);
+      } else {
+        // Range 30 to 60+: Orange (249, 115, 22) -> Fiery Red (239, 68, 68)
+        const t = Math.max(0, Math.min(1, (temp - midT) / (maxT - midT)));
+        r = Math.round(249 + (239 - 249) * t);
+        g = Math.round(115 + (68 - 115) * t);
+        b = Math.round(22 + (68 - 22) * t);
+      }
+      return { r, g, b, css: `rgb(${r}, ${g}, ${b})` };
+    }
+
+    // Render continuous 2D thermal dissipation gradient across the 15x15cm plate
+    function updateHeatmapSlab(data) {
+      const canvas = document.getElementById('heatmap-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Extract colors for each quadrant
+      const c1 = tempToRGB(data.t1); // Top-Left (OBC Core)
+      const c2 = tempToRGB(data.t2); // Top-Right (Solar Array)
+      const c3 = tempToRGB(data.t3); // Bottom-Left (EPS Battery)
+      const c4 = tempToRGB(data.t4); // Bottom-Right (Radiator)
+
+      // Clear
+      ctx.clearRect(0, 0, w, h);
+
+      // Radial heat diffusion circles for each sensor corner
+      const radius = w * 0.75;
+
+      // Top-Left (T1)
+      let g1 = ctx.createRadialGradient(0, 0, 5, 0, 0, radius);
+      g1.addColorStop(0, `rgba(${c1.r}, ${c1.g}, ${c1.b}, 1)`);
+      g1.addColorStop(1, `rgba(${c1.r}, ${c1.g}, ${c1.b}, 0)`);
+      ctx.fillStyle = g1;
+      ctx.fillRect(0, 0, w, h);
+
+      // Top-Right (T2)
+      ctx.globalCompositeOperation = 'screen';
+      let g2 = ctx.createRadialGradient(w, 0, 5, w, 0, radius);
+      g2.addColorStop(0, `rgba(${c2.r}, ${c2.g}, ${c2.b}, 1)`);
+      g2.addColorStop(1, `rgba(${c2.r}, ${c2.g}, ${c2.b}, 0)`);
+      ctx.fillStyle = g2;
+      ctx.fillRect(0, 0, w, h);
+
+      // Bottom-Left (T3)
+      let g3 = ctx.createRadialGradient(0, h, 5, 0, h, radius);
+      g3.addColorStop(0, `rgba(${c3.r}, ${c3.g}, ${c3.b}, 1)`);
+      g3.addColorStop(1, `rgba(${c3.r}, ${c3.g}, ${c3.b}, 0)`);
+      ctx.fillStyle = g3;
+      ctx.fillRect(0, 0, w, h);
+
+      // Bottom-Right (T4)
+      let g4 = ctx.createRadialGradient(w, h, 5, w, h, radius);
+      g4.addColorStop(0, `rgba(${c4.r}, ${c4.g}, ${c4.b}, 1)`);
+      g4.addColorStop(1, `rgba(${c4.r}, ${c4.g}, ${c4.b}, 0)`);
+      ctx.fillStyle = g4;
+      ctx.fillRect(0, 0, w, h);
+
+      // Reset blending
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Subtle metallic aluminum bus cross-grid lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h);
+      ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2);
+      ctx.stroke();
+
+      // Outer bezel border
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, w - 2, h - 2);
+
+      // Update plate inspector widgets
+      document.getElementById('plate-val-t1').innerText = data.t1.toFixed(1) + '°C';
+      document.getElementById('plate-color-t1').style.backgroundColor = c1.css;
+
+      document.getElementById('plate-val-t2').innerText = data.t2.toFixed(1) + '°C';
+      document.getElementById('plate-color-t2').style.backgroundColor = c2.css;
+
+      document.getElementById('plate-val-t3').innerText = data.t3.toFixed(1) + '°C';
+      document.getElementById('plate-color-t3').style.backgroundColor = c3.css;
+
+      document.getElementById('plate-val-t4').innerText = data.t4.toFixed(1) + '°C';
+      document.getElementById('plate-color-t4').style.backgroundColor = c4.css;
+
+      // Calculate thermal delta & average
+      const vals = [data.t1, data.t2, data.t3, data.t4];
+      const maxVal = Math.max(...vals);
+      const minVal = Math.min(...vals);
+      const avg = vals.reduce((a, b) => a + b, 0) / 4;
+
+      document.getElementById('thermal-delta').innerText = (maxVal - minVal).toFixed(1) + '°C ΔT';
+      document.getElementById('thermal-avg').innerText = avg.toFixed(1) + '°C';
+    }
+
+    // -------------------------------------------------------------------------
+    // INITIALIZATION: RESTORE CONNECTION & START 10-SECOND CYCLE
+    // -------------------------------------------------------------------------
+    function initEspConnection() {
+      const input = document.getElementById('esp-url-input');
+      const savedUrl = localStorage.getItem('esp32_url');
+
+      if (savedUrl) {
+        activeEspUrl = savedUrl;
+        if (input) input.value = savedUrl;
+      } else if (window.location.protocol.startsWith('http')) {
+        // If served directly by ESP32 web server
+        activeEspUrl = '/data';
+        if (input) input.value = '/data';
+      } else {
+        // Local file mode (e.g. file:///C:/...)
+        activeEspUrl = '';
+        if (input) input.placeholder = 'e.g. 192.168.1.184 or /data';
+        logTelemetry('INIT_INFO', 'Ground terminal ready. Enter your ESP32 IP address above and click CONNECT.');
+      }
+
+      // Initial telemetry fetch
+      pollNow();
+
+      // Start 1-second countdown and 10-second polling interval
+      startPollingLoop();
+    }
+
+    function startPollingLoop() {
+      if (pollIntervalTimer) clearInterval(pollIntervalTimer);
+      if (countdownIntervalTimer) clearInterval(countdownIntervalTimer);
+
+      countdownSeconds = POLL_INTERVAL;
+      updateCountdownUI();
+
+      // Countdown ticker every 1 second
+      countdownIntervalTimer = setInterval(() => {
+        if (!isFetching) {
+          countdownSeconds--;
+          if (countdownSeconds < 0) {
+            countdownSeconds = POLL_INTERVAL;
+          }
+          updateCountdownUI();
+        }
+      }, 1000);
+
+      // Downlink query every 10 seconds (10,000 ms)
+      pollIntervalTimer = setInterval(() => {
+        fetchData();
+      }, POLL_INTERVAL * 1000);
+    }
+
+    // Launch connection and telemetry loop
+    initEspConnection();
+  </script>
+</body>
+</html>
