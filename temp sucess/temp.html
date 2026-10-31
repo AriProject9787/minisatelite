@@ -1,0 +1,2360 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAT-LINK // Orbital Telemetry Terminal</title>
+  <!-- Google Fonts & Tailwind CDN & Chart.js -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <style>
+    body {
+      font-family: 'Chakra Petch', sans-serif;
+      background-color: #030712;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 50% -20%, rgba(14, 165, 233, 0.18), transparent 70%),
+        radial-gradient(circle at 10% 90%, rgba(99, 102, 241, 0.12), transparent 40%),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .glow-cyan {
+      box-shadow: 0 0 20px -3px rgba(6, 182, 212, 0.35);
+    }
+
+    .glow-badge {
+      box-shadow: 0 0 8px 1px rgba(34, 197, 94, 0.4);
+    }
+
+    html,
+    body {
+      overflow-x: hidden;
+      overflow-y: auto;
+      min-height: 100%;
+    }
+
+    .scanline {
+      position: relative;
+    }
+
+    .scanline::after {
+      content: " ";
+      display: block;
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+      background-size: 100% 4px;
+      z-index: 999;
+      pointer-events: none;
+      opacity: 0.35;
+    }
+
+    @keyframes pulse-slow {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.4;
+        transform: scale(0.95);
+      }
+    }
+
+    .status-pulse {
+      animation: pulse-slow 2s infinite ease-in-out;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #0b0f19;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+  </style>
+</head>
+
+<body class="text-slate-100 min-h-screen p-3 md:p-6 scanline flex flex-col justify-between overflow-y-auto">
+
+  <!-- Main Container -->
+  <div class="max-w-7xl mx-auto w-full">
+
+    <!-- Top Header: Mission Control Bar -->
+    <header
+      class="bg-slate-900/80 backdrop-blur-md border border-cyan-500/30 rounded-2xl p-4 md:p-5 mb-6 shadow-2xl relative">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+
+        <!-- Left: Satellite Identity -->
+        <div class="flex items-center space-x-4">
+          <div
+            class="relative flex items-center justify-center w-12 h-12 rounded-xl bg-cyan-950/70 border border-cyan-400/40 text-cyan-400">
+            <svg class="w-7 h-7 animate-spin" style="animation-duration: 20s;" fill="none" stroke="currentColor"
+              viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" stroke-width="1.5" stroke-dasharray="4 2"></circle>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 3v3m0 12v3M3 12h3m12 0h3m-4.5-6.5l2-2m-11 11l2-2m0-7l-2-2m11 11l-2-2"></path>
+            </svg>
+            <span class="absolute -top-1 -right-1 flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+            </span>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span
+                class="text-xs px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono tracking-wider font-semibold">LEO-SAT
+                // BUS-04</span>
+              <span class="text-xs text-slate-400 mono hidden sm:inline">NORAD #54921</span>
+            </div>
+            <h1
+              class="text-xl md:text-2xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-200 to-indigo-400">
+              ORBITAL THERMAL TELEMETRY STATION
+            </h1>
+          </div>
+        </div>
+
+        <!-- Right: Status Indicators & Time -->
+        <div class="flex flex-wrap items-center gap-3 text-xs mono">
+          <div class="bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2">
+            <span id="conn-indicator" class="w-2.5 h-2.5 rounded-full bg-emerald-400 glow-badge status-pulse"></span>
+            <span id="conn-text" class="text-emerald-400 font-medium">LINK ACTIVE</span>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 text-slate-300">
+            <span class="text-slate-500">PACKETS:</span> <span id="pkt-count" class="text-cyan-300 font-bold">0</span>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 text-slate-300">
+            <span class="text-slate-500">UTC CLOCK:</span> <span id="utc-clock"
+              class="text-amber-400 font-bold">00:00:00 UTC</span>
+          </div>
+
+          <button id="mode-toggle" onclick="toggleDataMode()"
+            class="bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 px-3 py-2 rounded-lg transition-all duration-150">
+            MODE: <span id="mode-label" class="font-bold text-white">LIVE</span>
+          </button>
+
+          <button onclick="toggleWiringModal()"
+            class="bg-gradient-to-r from-cyan-950 to-indigo-950 hover:from-cyan-900 hover:to-indigo-900 border border-cyan-400/60 text-cyan-200 px-3 py-2 rounded-lg transition-all duration-150 flex items-center space-x-1.5 shadow-lg shadow-cyan-950/50">
+            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            </svg>
+            <span class="font-bold tracking-wide">WIRING DIAGRAM</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Micro Status Bar -->
+      <div
+        class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mt-4 pt-3 border-t border-slate-800/80 text-[11px] mono text-slate-400">
+        <div>GPS: <span id="gps-micro-fix" class="text-amber-400 font-semibold">SEARCHING SATS</span></div>
+        <div>SATELLITES: <span id="gps-micro-sats" class="text-slate-200 font-semibold">0 SATS</span></div>
+        <div>CABIN RH: <span id="hum-val" class="text-teal-300 font-semibold">48.0%</span></div>
+        <div>TEMP DRIFT: <span id="drift-val" class="text-cyan-300 font-semibold">STABLE</span></div>
+        <div>GPS COORD: <span id="gps-micro-coord" class="text-cyan-300 font-semibold">WAITING FIX</span></div>
+        <div>CRC ERRORS: <span id="crc-err-count" class="text-emerald-400 font-semibold">0</span></div>
+        <div>PKT LOSS: <span id="pkt-lost-count" class="text-emerald-400 font-semibold">0</span></div>
+        <div>WIFI RSSI: <span id="link-rssi" class="text-emerald-400 font-semibold">-- dBm</span></div>
+      </div>
+    </header>
+
+    <!-- Telemetry Downlink Control Bar: Dual Wi-Fi & USB Web Serial Gateway -->
+    <div class="bg-slate-900/80 backdrop-blur-md border border-cyan-500/30 rounded-2xl p-4 mb-6 shadow-2xl relative">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 font-mono text-xs">
+
+        <!-- Left: Device Downlink Input & Controls (ESP32 WiFi + Arduino USB) -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- ESP32 Wi-Fi Controls -->
+          <div
+            class="flex items-center space-x-2 bg-cyan-950/70 border border-cyan-500/40 px-2.5 py-1.5 rounded-lg text-cyan-300 font-semibold">
+            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+            <span>ESP32 HOST IP:</span>
+          </div>
+
+          <input id="esp-url-input" type="text" placeholder="192.168.1.x or /data"
+            class="bg-slate-950 border border-slate-700 focus:border-cyan-400 text-slate-100 px-3 py-1.5 rounded-lg focus:outline-none w-44 sm:w-56 tracking-wider placeholder-slate-600 transition-colors">
+
+          <button onclick="applyEspUrl()"
+            class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition-all shadow-md shadow-cyan-950 flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span>CONNECT</span>
+          </button>
+
+          <button onclick="pollNow()"
+            class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition-all flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>POLL</span>
+          </button>
+
+          <!-- Divider -->
+          <div class="hidden sm:block w-px h-6 bg-slate-700 mx-1"></div>
+
+          <!-- Direct Arduino Uno USB Serial (Web Serial API) -->
+          <button id="usb-serial-btn" onclick="toggleWebSerial()"
+            class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all shadow-md shadow-indigo-950 flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span>CONNECT ARDUINO (USB)</span>
+          </button>
+
+          <button onclick="toggleWiringModal()"
+            class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 transition-all flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+            <span>CIRCUIT DIAGRAM</span>
+          </button>
+        </div>
+
+        <!-- Right: 10s Countdown, Sync Status & Latency -->
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- USB Serial Status Badge -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 flex items-center space-x-1.5">
+            <span class="text-slate-500">USB LINK:</span>
+            <span id="usb-serial-status" class="text-slate-400 font-semibold">STANDBY</span>
+          </div>
+
+          <!-- 5s Countdown Progress Indicator -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-1.5 flex items-center space-x-2">
+            <span class="text-slate-500">CYCLE:</span>
+            <span class="text-slate-300 font-semibold">5s</span>
+            <div class="w-px h-3 bg-slate-800"></div>
+            <span class="text-slate-500">NEXT:</span>
+            <span id="countdown-badge" class="text-cyan-400 font-bold w-12 text-center">5s</span>
+            <div class="w-14 h-1.5 bg-slate-800 rounded-full overflow-hidden ml-1">
+              <div id="countdown-progress"
+                class="h-full bg-cyan-400 rounded-full transition-all duration-1000 ease-linear" style="width: 100%;">
+              </div>
+            </div>
+          </div>
+
+          <!-- Last Packet Timestamp -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-300">
+            <span class="text-slate-500">LAST SYNC:</span> <span id="last-sync-time"
+              class="text-emerald-400 font-bold">--:--:--</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Subsystem Telemetry Cards (Summary Bar) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+      <!-- T1 Payload Core -->
+      <div
+        class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-rose-500 border border-slate-800/90 hover:border-rose-500/50 transition-all duration-200">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">T1 // SENSOR (D2)</span>
+          <span
+            class="px-1.5 py-0.5 rounded bg-rose-950/60 text-rose-300 text-[10px] mono border border-rose-800/50">DHT22
+            #1 // OBC CORE</span>
+        </div>
+        <div class="flex items-baseline justify-between mt-1">
+          <p id="val-t1" class="text-3xl font-bold font-mono text-rose-400">--°C</p>
+          <span id="stat-t1" class="text-[11px] font-mono text-emerald-400">NOMINAL</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+          <span id="hum-t1" class="text-rose-300/90 font-mono font-medium">RH: --%</span>
+          <span id="rate-t1" class="text-slate-400">0.0°/s</span>
+        </div>
+      </div>
+
+      <!-- T2 Solar Array -->
+      <div
+        class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-emerald-500 border border-slate-800/90 hover:border-emerald-500/50 transition-all duration-200">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">T2 // SENSOR (D3)</span>
+          <span
+            class="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 text-[10px] mono border border-emerald-800/50">DHT22
+            #2 // SOLAR ARRAY</span>
+        </div>
+        <div class="flex items-baseline justify-between mt-1">
+          <p id="val-t2" class="text-3xl font-bold font-mono text-emerald-400">--°C</p>
+          <span id="stat-t2" class="text-[11px] font-mono text-emerald-400">NOMINAL</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+          <span id="hum-t2" class="text-emerald-300/90 font-mono font-medium">RH: --%</span>
+          <span id="rate-t2" class="text-slate-400">0.0°/s</span>
+        </div>
+      </div>
+
+      <!-- T3 Battery Module -->
+      <div
+        class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-cyan-500 border border-slate-800/90 hover:border-cyan-500/50 transition-all duration-200">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">T3 // SENSOR (D4)</span>
+          <span
+            class="px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 text-[10px] mono border border-cyan-800/50">DHT22
+            #3 // EPS BATTERY</span>
+        </div>
+        <div class="flex items-baseline justify-between mt-1">
+          <p id="val-t3" class="text-3xl font-bold font-mono text-cyan-400">--°C</p>
+          <span id="stat-t3" class="text-[11px] font-mono text-emerald-400">OPTIMAL</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+          <span id="hum-t3" class="text-cyan-300/90 font-mono font-medium">RH: --%</span>
+          <span id="rate-t3" class="text-slate-400">0.0°/s</span>
+        </div>
+      </div>
+
+      <!-- T4 External Radiator -->
+      <div
+        class="bg-slate-900/60 backdrop-blur-md rounded-xl p-4 border-l-4 border-l-amber-500 border border-slate-800/90 hover:border-amber-500/50 transition-all duration-200">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span class="font-mono">T4 // SENSOR (D5)</span>
+          <span
+            class="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 text-[10px] mono border border-amber-800/50">DHT22
+            #4 // RADIATOR</span>
+        </div>
+        <div class="flex items-baseline justify-between mt-1">
+          <p id="val-t4" class="text-3xl font-bold font-mono text-amber-400">--°C</p>
+          <span id="stat-t4" class="text-[11px] font-mono text-emerald-400">NOMINAL</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+          <span id="hum-t4" class="text-amber-300/90 font-mono font-medium">RH: --%</span>
+          <span id="rate-t4" class="text-slate-400">0.0°/s</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- GPS NAVIGATION & ORBITAL GROUND TRACK SECTION (NEO-6M V2) -->
+    <div
+      class="bg-slate-900/80 backdrop-blur-md p-4 md:p-5 rounded-2xl border border-cyan-500/30 shadow-2xl mb-6 relative">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-slate-800 gap-2">
+        <div class="flex items-center space-x-3">
+          <div
+            class="relative flex items-center justify-center w-8 h-8 rounded-lg bg-teal-950/80 border border-teal-400/50 text-teal-400">
+            <svg class="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="font-bold tracking-wider text-sm md:text-base text-cyan-300 font-mono">
+              GPS NAVIGATION &amp; ORBITAL GROUND TRACK // NEO-6M V2
+            </h2>
+            <p class="text-[11px] text-slate-400 font-mono">
+              REAL-TIME SATELLITE EPHEMERIS, GEODETIC FIX &amp; COORDINATE MATRIX
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2 text-xs font-mono">
+          <span id="gps-status-badge"
+            class="px-2.5 py-1 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60 font-semibold tracking-wider">
+            SEARCHING SATELLITES...
+          </span>
+          <a id="google-maps-btn" href="#" target="_blank"
+            class="px-3 py-1 rounded bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-200 transition-all flex items-center space-x-1">
+            <span>GOOGLE MAPS</span>
+            <svg class="w-3 h-3 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- GPS Visual Grid & Live Leaflet Map -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        <!-- Left: Geodetic Numerical Instruments (6 Metrics) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-3 text-xs font-mono">
+
+          <!-- Latitude -->
+          <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <span class="text-slate-500 text-[10px]">GEODETIC LATITUDE</span>
+            <p id="gps-lat" class="text-lg font-bold text-cyan-300 mt-1">--.------°</p>
+            <span class="text-[10px] text-slate-400">WGS84 EQUATOR REF</span>
+          </div>
+
+          <!-- Longitude -->
+          <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <span class="text-slate-500 text-[10px]">GEODETIC LONGITUDE</span>
+            <p id="gps-lng" class="text-lg font-bold text-cyan-300 mt-1">--.------°</p>
+            <span class="text-[10px] text-slate-400">PRIME MERIDIAN REF</span>
+          </div>
+
+          <!-- Altitude -->
+          <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <span class="text-slate-500 text-[10px]">ALTITUDE (MSL)</span>
+            <p id="gps-alt" class="text-lg font-bold text-teal-300 mt-1">--.- m</p>
+            <span class="text-[10px] text-slate-400">MEAN SEA LEVEL</span>
+          </div>
+
+          <!-- Ground Speed -->
+          <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <span class="text-slate-500 text-[10px]">GROUND SPEED</span>
+            <p id="gps-spd" class="text-lg font-bold text-amber-300 mt-1">--.- km/h</p>
+            <span class="text-[10px] text-slate-400">HORIZONTAL VELOCITY</span>
+          </div>
+
+          <!-- Satellite Constellation -->
+          <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <span class="text-slate-500 text-[10px]">CONSTELLATION</span>
+            <p id="gps-sats" class="text-lg font-bold text-emerald-400 mt-1">0 SATS</p>
+            <span class="text-[10px] text-slate-400">TRACKED / IN VIEW</span>
+          </div>
+
+          <!-- HDOP Precision -->
+          <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <span class="text-slate-500 text-[10px]">PRECISION (HDOP)</span>
+            <p id="gps-hdop" class="text-lg font-bold text-indigo-300 mt-1">--.--</p>
+            <span id="gps-hdop-quality" class="text-[10px] text-slate-400">DILUTION FACTOR</span>
+          </div>
+
+        </div>
+
+        <!-- Right: Real-Time Interactive Leaflet Map Stage -->
+        <div
+          class="lg:col-span-2 h-72 sm:h-80 rounded-xl overflow-hidden border border-slate-800 bg-slate-950 relative shadow-inner">
+          <div id="gps-map" class="w-full h-full"></div>
+
+          <!-- Map HUD Overlay Badges -->
+          <div
+            class="absolute top-2 left-2 z-[400] bg-black/75 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-cyan-500/40 text-[10px] mono text-cyan-300 pointer-events-none">
+            MAP DATUM: WGS84 // LEAFLET OSM DOWNLINK
+          </div>
+          <div
+            class="absolute bottom-2 left-2 z-[400] bg-black/75 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-slate-700 text-[10px] mono text-slate-300 pointer-events-none">
+            COORDINATE STREAM: <span id="map-coord-display" class="text-emerald-400 font-semibold">SEARCHING...</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CAMERA & OPTICAL RECONNAISSANCE SECTION (ESP32-CAM OV2640) -->
+    <div
+      class="bg-slate-900/80 backdrop-blur-md p-4 md:p-5 rounded-2xl border border-cyan-500/30 shadow-2xl mb-6 relative">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-800 gap-2">
+        <div class="flex items-center space-x-3">
+          <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+          </span>
+          <h2 class="font-bold tracking-wider text-sm md:text-base text-cyan-300 font-mono">
+            OPTICAL DOWNLINK // ESP32-CAM OV2640 RECON FEED
+          </h2>
+          <span id="cam-status-badge"
+            class="text-[10px] mono px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-semibold tracking-wider">15s
+            SNAPSHOT SYNC</span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-xs mono">
+          <!-- Low / High Performance Selector -->
+          <div class="flex items-center rounded-lg bg-slate-950 border border-slate-700 p-0.5">
+            <button id="cam-perf-low" onclick="setCamPerformance('low')"
+              class="px-2 py-1 rounded text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400 transition-all">
+              PERF: LOW (320x240)
+            </button>
+            <button id="cam-perf-high" onclick="setCamPerformance('high')"
+              class="px-2 py-1 rounded text-xs font-bold text-slate-400 hover:text-slate-200 transition-all">
+              HIGH (640x480)
+            </button>
+          </div>
+
+          <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700 text-xs font-mono">
+            INTERVAL: 15s
+          </span>
+          <input id="cam-url-input" type="text" placeholder="/cam or http://ip/cam" value="/cam"
+            class="bg-slate-950 border border-slate-700 text-slate-200 px-2 py-1 rounded text-xs focus:outline-none focus:border-cyan-400 w-32 sm:w-44">
+          <button onclick="applyCamUrl()"
+            class="px-2.5 py-1 rounded bg-cyan-950 border border-cyan-500/50 hover:bg-cyan-900 text-cyan-300 text-xs font-semibold">
+            APPLY
+          </button>
+          <button onclick="captureNewPhoto(true)"
+            class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span>CAPTURE</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Video / Camera Display Viewport with Sci-Fi HUD Overlay -->
+      <div
+        class="relative w-full h-64 sm:h-80 md:h-96 rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center">
+        <!-- Live Image Feed -->
+        <img id="satellite-camera"
+          src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80"
+          alt="Satellite Nadir Optical Feed" onerror="handleCamError()"
+          class="w-full h-full object-cover transition-opacity duration-300">
+
+        <!-- HUD Targeting Crosshairs & Reticle Overlay -->
+        <div class="absolute inset-0 pointer-events-none p-4 flex flex-col justify-between">
+
+          <!-- Top Overlay: Timecode & Resolution -->
+          <div class="flex justify-between items-start text-[11px] mono">
+            <div class="bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded border border-cyan-500/40 text-cyan-300">
+              FOV: 84.5° // SENSOR: OV2640 // EXPOSURE: AUTO
+            </div>
+            <div
+              class="bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded border border-emerald-500/40 text-emerald-400 font-bold">
+              REC ● <span id="cam-timestamp">00:00:00.00</span>
+            </div>
+          </div>
+
+          <!-- Center Crosshair Reticle -->
+          <div class="absolute inset-0 flex items-center justify-center">
+            <div class="w-24 h-24 border border-cyan-400/40 rounded-full flex items-center justify-center relative">
+              <div class="w-1.5 h-1.5 bg-cyan-400 rounded-full"></div>
+              <div class="absolute w-8 h-[1px] bg-cyan-400/70 -left-4"></div>
+              <div class="absolute w-8 h-[1px] bg-cyan-400/70 -right-4"></div>
+              <div class="absolute h-8 w-[1px] bg-cyan-400/70 -top-4"></div>
+              <div class="absolute h-8 w-[1px] bg-cyan-400/70 -bottom-4"></div>
+            </div>
+          </div>
+
+          <!-- Bottom Overlay: Target Coordinates & Status -->
+          <div class="flex justify-between items-end text-[11px] mono">
+            <div class="bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded border border-slate-700 text-slate-300">
+              TARGET: LAT 28°36'N // LON 80°36'W (CAPE CANAVERAL PASS)
+            </div>
+            <div class="bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded border border-slate-700 text-slate-400">
+              DOWNLINK: <span id="cam-interval-display" class="text-cyan-300 font-bold">15s INTERVAL</span> // RES:
+              <span id="cam-res-display" class="text-slate-200 font-bold">QVGA (320x240)</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 SEPARATE TEMPERATURE CHARTS (2x2 Grid) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+
+      <!-- Chart 1: OBC Processor Core -->
+      <div class="bg-slate-900/80 backdrop-blur-md p-5 rounded-2xl border border-slate-800 shadow-xl relative">
+        <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-800/80">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-sm bg-rose-500 inline-block shadow-sm shadow-rose-500/50"></span>
+            <h2 class="font-semibold tracking-wide text-sm md:text-base text-rose-300">CHANNEL 1 : OBC PROCESSOR &amp;
+              COMMS</h2>
+          </div>
+          <span
+            class="text-xs font-mono text-rose-400/90 bg-rose-950/50 px-2 py-0.5 rounded border border-rose-800/30">DHT22
+            #1 (Pin D2)</span>
+        </div>
+        <div class="h-64 w-full">
+          <canvas id="chart-t1"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Solar Panel Primary -->
+      <div class="bg-slate-900/80 backdrop-blur-md p-5 rounded-2xl border border-slate-800 shadow-xl relative">
+        <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-800/80">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-sm bg-emerald-500 inline-block shadow-sm shadow-emerald-500/50"></span>
+            <h2 class="font-semibold tracking-wide text-sm md:text-base text-emerald-300">CHANNEL 2 : SOLAR ARRAY &amp;
+              CELL BANK</h2>
+          </div>
+          <span
+            class="text-xs font-mono text-emerald-400/90 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/30">DHT22
+            #2 (Pin D3)</span>
+        </div>
+        <div class="h-64 w-full">
+          <canvas id="chart-t2"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 3: Power Distribution / LiFePO4 Battery -->
+      <div class="bg-slate-900/80 backdrop-blur-md p-5 rounded-2xl border border-slate-800 shadow-xl relative">
+        <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-800/80">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-sm bg-cyan-400 inline-block shadow-sm shadow-cyan-400/50"></span>
+            <h2 class="font-semibold tracking-wide text-sm md:text-base text-cyan-300">CHANNEL 3 : EPS BATTERY PACK
+              ENCLOSURE</h2>
+          </div>
+          <span
+            class="text-xs font-mono text-cyan-400/90 bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-800/30">DHT22
+            #3 (Pin D4)</span>
+        </div>
+        <div class="h-64 w-full">
+          <canvas id="chart-t3"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 4: Thermal Dissipation Radiator -->
+      <div class="bg-slate-900/80 backdrop-blur-md p-5 rounded-2xl border border-slate-800 shadow-xl relative">
+        <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-800/80">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-sm bg-amber-400 inline-block shadow-sm shadow-amber-400/50"></span>
+            <h2 class="font-semibold tracking-wide text-sm md:text-base text-amber-300">CHANNEL 4 : HULL DEPLOYABLE
+              RADIATOR</h2>
+          </div>
+          <span
+            class="text-xs font-mono text-amber-400/90 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/30">DHT22
+            #4 (Pin D5)</span>
+        </div>
+        <div class="h-64 w-full">
+          <canvas id="chart-t4"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 3D ROTATING SATELLITE THERMAL SLAB (15cm x 15cm x 0.5cm HEATMAP) -->
+    <div
+      class="bg-slate-900/80 backdrop-blur-md p-4 md:p-6 rounded-2xl border border-cyan-500/30 shadow-2xl mb-6 relative">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-slate-800 gap-2">
+        <div class="flex items-center space-x-3">
+          <span class="w-3 h-3 rounded bg-indigo-500 animate-pulse"></span>
+          <div>
+            <h2 class="font-bold tracking-wider text-sm md:text-base text-cyan-300 font-mono">
+              3D ORBITAL CHASSIS // THERMAL HEAT MAP (15cm × 15cm × 0.5cm)
+            </h2>
+            <p class="text-[11px] text-slate-400 font-mono">
+              SATELLITE BUS SURFACE TEMPERATURE GRADIENT MATRIX [T1, T2, T3, T4]
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2 text-xs font-mono">
+          <button id="slab-rot-toggle" onclick="toggleSlabRotation()"
+            class="px-3 py-1.5 rounded bg-cyan-950 border border-cyan-500/40 hover:bg-cyan-900 text-cyan-300">
+            ROTATION: <span id="rot-state" class="font-bold text-emerald-400">ON</span>
+          </button>
+          <button onclick="resetSlabAngle()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">
+            RESET ANGLE
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Visual Container -->
+      <div class="flex flex-col lg:flex-row items-center justify-between gap-6">
+
+        <!-- 3D Perspective Stage -->
+        <div
+          class="w-full lg:w-2/3 h-72 sm:h-80 flex items-center justify-center relative overflow-hidden bg-slate-950/80 rounded-xl border border-slate-800/80"
+          style="perspective: 900px;">
+
+          <!-- Background Grid & Orbital Reticle -->
+          <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+            <div class="w-64 h-64 border border-dashed border-cyan-400 rounded-full"></div>
+            <div class="w-48 h-48 border border-slate-600 rounded-full absolute"></div>
+            <div class="w-full h-[1px] bg-cyan-500/30 absolute"></div>
+            <div class="h-full w-[1px] bg-cyan-500/30 absolute"></div>
+          </div>
+
+          <!-- The 3D Rotating Square Slab Container (15cm x 15cm, height 0.5cm) -->
+          <div id="thermal-slab" class="relative"
+            style="width: 15cm; height: 15cm; max-width: 260px; max-height: 260px; transform-style: preserve-3d; transform: rotateX(60deg) rotateZ(35deg); transition: box-shadow 0.3s ease;">
+
+            <!-- Top Face with 4-Quadrant Dynamic Canvas Heatmap -->
+            <div
+              class="absolute inset-0 rounded-lg overflow-hidden border border-slate-400/40 shadow-2xl flex flex-col justify-between"
+              style="transform: translateZ(calc(0.5cm / 2)); background: #030712;">
+              <canvas id="heatmap-canvas" width="260" height="260" class="w-full h-full block"></canvas>
+
+              <!-- Quadrant Sensor Marker Badges -->
+              <div
+                class="absolute inset-0 pointer-events-none p-2 flex flex-col justify-between font-mono text-[10px] font-bold">
+                <div class="flex justify-between">
+                  <span class="bg-black/60 px-1.5 py-0.5 rounded text-rose-300 border border-rose-500/30">T1: OBC</span>
+                  <span class="bg-black/60 px-1.5 py-0.5 rounded text-emerald-300 border border-emerald-500/30">T2:
+                    SOLAR</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="bg-black/60 px-1.5 py-0.5 rounded text-cyan-300 border border-cyan-500/30">T3:
+                    BATT</span>
+                  <span class="bg-black/60 px-1.5 py-0.5 rounded text-amber-300 border border-amber-500/30">T4:
+                    RAD</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bottom Face -->
+            <div class="absolute inset-0 rounded-lg bg-slate-900 border border-slate-700/60"
+              style="transform: translateZ(calc(-0.5cm / 2)) rotateY(180deg);">
+            </div>
+
+            <!-- Front Side (0.5cm height) -->
+            <div class="absolute left-0 right-0 top-0 bg-slate-800/95 border-t border-b border-cyan-500/40"
+              style="height: 0.5cm; transform-origin: top; transform: rotateX(90deg) translateZ(0);">
+            </div>
+
+            <!-- Back Side (0.5cm height) -->
+            <div class="absolute left-0 right-0 bottom-0 bg-slate-900 border-t border-b border-slate-700"
+              style="height: 0.5cm; transform-origin: bottom; transform: rotateX(-90deg) translateZ(0);">
+            </div>
+
+            <!-- Left Side (0.5cm height) -->
+            <div class="absolute top-0 bottom-0 left-0 bg-slate-800/90 border-l border-r border-slate-700"
+              style="width: 0.5cm; transform-origin: left; transform: rotateY(-90deg) translateZ(0);">
+            </div>
+
+            <!-- Right Side (0.5cm height) -->
+            <div class="absolute top-0 bottom-0 right-0 bg-slate-800/90 border-l border-r border-slate-700"
+              style="width: 0.5cm; transform-origin: right; transform: rotateY(90deg) translateZ(0);">
+            </div>
+
+          </div>
+
+          <!-- Real-Time Dimension Tag -->
+          <div
+            class="absolute bottom-3 left-3 bg-black/70 px-2 py-1 rounded text-[10px] font-mono border border-slate-700 text-slate-300">
+            SPECS: 15.0 × 15.0 cm | H: 0.5 cm (AL-6061-T6 SLAB)
+          </div>
+
+          <div
+            class="absolute bottom-3 right-3 bg-black/70 px-2 py-1 rounded text-[10px] font-mono border border-slate-700 text-cyan-300">
+            YAW: <span id="slab-angle-readout">0°</span>
+          </div>
+
+        </div>
+
+        <!-- Heat Map Palette Scale & Quadrant Inspector -->
+        <div class="w-full lg:w-1/3 flex flex-col justify-between space-y-4">
+
+          <!-- Heatmap Temperature Color Legend -->
+          <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+            <h3 class="text-xs font-mono font-bold text-slate-300 mb-2 flex items-center justify-between">
+              <span>THERMAL SPECTRUM PALETTE</span>
+              <span class="text-[10px] text-cyan-400 font-normal">BLUE &rarr; ORANGE &rarr; RED</span>
+            </h3>
+
+            <!-- Spectrum Bar (Blue -> Orange -> Red) -->
+            <div class="w-full h-3.5 rounded-full overflow-hidden border border-slate-700 shadow-inner"
+              style="background: linear-gradient(to right, #2563eb 0%, #38bdf8 30%, #f97316 65%, #ef4444 100%);">
+            </div>
+
+            <div class="flex justify-between text-[10px] font-mono text-slate-400 mt-1">
+              <span>COLD (&le; 10°C)</span>
+              <span>NOMINAL (25°C)</span>
+              <span>WARM (40°C)</span>
+              <span>HOT (&ge; 60°C)</span>
+            </div>
+          </div>
+
+          <!-- Quadrant Value Readouts on the 15x15cm plate -->
+          <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-rose-900/40 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-slate-400">QUAD-1 (OBC)</div>
+                <div id="plate-val-t1" class="text-sm font-bold text-rose-400">--°C</div>
+              </div>
+              <span id="plate-color-t1" class="w-3.5 h-3.5 rounded-full border border-white/20"></span>
+            </div>
+
+            <div
+              class="bg-slate-950/70 p-2.5 rounded-lg border border-emerald-900/40 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-slate-400">QUAD-2 (SOLAR)</div>
+                <div id="plate-val-t2" class="text-sm font-bold text-emerald-400">--°C</div>
+              </div>
+              <span id="plate-color-t2" class="w-3.5 h-3.5 rounded-full border border-white/20"></span>
+            </div>
+
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-cyan-900/40 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-slate-400">QUAD-3 (BATT)</div>
+                <div id="plate-val-t3" class="text-sm font-bold text-cyan-400">--°C</div>
+              </div>
+              <span id="plate-color-t3" class="w-3.5 h-3.5 rounded-full border border-white/20"></span>
+            </div>
+
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-amber-900/40 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-slate-400">QUAD-4 (RAD)</div>
+                <div id="plate-val-t4" class="text-sm font-bold text-amber-400">--°C</div>
+              </div>
+              <span id="plate-color-t4" class="w-3.5 h-3.5 rounded-full border border-white/20"></span>
+            </div>
+          </div>
+
+          <!-- Heat Flux Summary -->
+          <div
+            class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-400 space-y-1">
+            <div class="flex justify-between">
+              <span>THERMAL GRADIENT:</span>
+              <span id="thermal-delta" class="text-slate-200 font-bold">--°C &Delta;T</span>
+            </div>
+            <div class="flex justify-between">
+              <span>AVG SURFACE TEMP:</span>
+              <span id="thermal-avg" class="text-cyan-300 font-bold">--°C</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Mission Event Log Console -->
+    <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 font-mono text-xs shadow-inner">
+      <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+        <div class="flex items-center space-x-2 text-slate-400">
+          <span class="inline-block w-2 h-2 rounded-full bg-cyan-400"></span>
+          <span class="font-semibold tracking-wider text-slate-200">GROUND STATION TELEMETRY LOG</span>
+        </div>
+        <span class="text-[10px] text-slate-500">AUTO-SCROLL ENABLED</span>
+      </div>
+      <div id="telemetry-log" class="h-28 overflow-y-auto space-y-1 text-slate-400 pr-2">
+        <div><span class="text-slate-600">[SYS_INIT]</span> Telemetry ground terminal initialized. Ready for ESP32
+          downlink stream...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="mt-8 text-center text-xs font-mono text-slate-600">
+    SAT-LINK TELEMETRY PROTOCOL v2.4 // ESP32 WEBSERVER INTERFACE // ALL SYSTEMS OPERATIONAL
+  </footer>
+
+  <!-- SCRIPT LOGIC -->
+  <script>
+    // Max data history points per chart
+    const MAX_POINTS = 25;
+    let packetCount = 0;
+    let simulationMode = false;
+    let failCount = 0;
+
+    // 5-Second Telemetry Sync Cycle (ESP32-CAM to Website, matching Uno 5s cycle)
+    const POLL_INTERVAL = 5; // seconds
+    let countdownSeconds = POLL_INTERVAL;
+    let pollIntervalTimer = null;
+    let countdownIntervalTimer = null;
+    let activeEspUrl = '';
+    let isFetching = false;
+
+    // Previous values to calculate rate of change
+    let prevValues = { t1: null, t2: null, t3: null, t4: null };
+
+    // GPS Telemetry State (NEO-6M V2)
+    let gpsData = {
+      lat: 0.0,
+      lng: 0.0,
+      alt: 0.0,
+      spd: 0.0,
+      sats: 0,
+      hdop: 99.9,
+      fix: 0
+    };
+
+    // Leaflet Interactive GPS Map Instance & Marker
+    let leafletMap = null;
+    let gpsMarker = null;
+    let gpsTrackPolyline = null;
+    let gpsTrackPoints = [];
+
+    function initGpsMap() {
+      try {
+        const mapContainer = document.getElementById('gps-map');
+        if (!mapContainer || typeof L === 'undefined') return;
+
+        // Default initial center (Equator / Gulf)
+        leafletMap = L.map('gps-map', {
+          center: [13.0827, 80.2707],
+          zoom: 12,
+          zoomControl: false,
+          attributionControl: false
+        });
+
+        // Sci-Fi Dark-Themed Tile Layer (CartoDB Dark Matter)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19,
+          subdomains: 'abcd',
+        }).addTo(leafletMap);
+
+        // Custom Satellite Glowing Marker
+        const satIcon = L.divIcon({
+          className: 'custom-sat-pin',
+          html: `
+            <div style="position:relative; width:24px; height:24px;">
+              <span style="position:absolute; inset:0; border-radius:50%; background:#06b6d4; opacity:0.6; animation:ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+              <span style="position:absolute; inset:3px; border-radius:50%; background:#0891b2; border:2px solid #67e8f9; box-shadow:0 0 12px #06b6d4;"></span>
+            </div>
+          `,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+
+        gpsMarker = L.marker([13.0827, 80.2707], { icon: satIcon }).addTo(leafletMap);
+        gpsMarker.bindPopup('<b style="font-family:JetBrains Mono; color:#06b6d4;">MINISAT GROUND TRACK</b><br><span style="font-size:11px;">Awaiting satellite fix...</span>');
+
+        // Polyline Ground Track History
+        gpsTrackPolyline = L.polyline([], {
+          color: '#06b6d4',
+          weight: 2.5,
+          opacity: 0.8,
+          dashArray: '4, 6'
+        }).addTo(leafletMap);
+
+      } catch (err) {
+        console.warn('GPS map init warning:', err);
+      }
+    }
+
+    // Common chart options builder for futuristic sci-fi look
+    function createChartConfig(color, gradientStart, gradientEnd, label) {
+      return {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: label,
+            data: [],
+            borderColor: color,
+            backgroundColor: function (context) {
+              const chart = context.chart;
+              const { ctx, chartArea } = chart;
+              if (!chartArea) return null;
+              const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+              gradient.addColorStop(0, gradientStart);
+              gradient.addColorStop(1, gradientEnd);
+              return gradient;
+            },
+            fill: true,
+            borderWidth: 2,
+            tension: 0.35,
+            pointRadius: 2.5,
+            pointHoverRadius: 6,
+            pointBackgroundColor: color,
+            pointBorderColor: '#0f172a',
+            pointBorderWidth: 1.5,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 400 },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(15, 23, 42, 0.95)',
+              titleFont: { family: 'JetBrains Mono', size: 11 },
+              bodyFont: { family: 'JetBrains Mono', size: 12 },
+              borderColor: color,
+              borderWidth: 1,
+              padding: 10,
+              displayColors: false,
+              callbacks: {
+                label: function (context) {
+                  return `TEMP: ${context.parsed.y.toFixed(2)} °C`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(51, 65, 85, 0.3)' },
+              ticks: {
+                color: '#64748b',
+                font: { family: 'JetBrains Mono', size: 10 },
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 6
+              }
+            },
+            y: {
+              grid: { color: 'rgba(51, 65, 85, 0.35)' },
+              ticks: {
+                color: '#94a3b8',
+                font: { family: 'JetBrains Mono', size: 10 },
+                callback: function (v) { return v + '°C'; }
+              }
+            }
+          }
+        }
+      };
+    }
+
+    // Initialize the 4 individual charts
+    const chart1 = new Chart(
+      document.getElementById('chart-t1').getContext('2d'),
+      createChartConfig('#f43f5e', 'rgba(244, 63, 94, 0.35)', 'rgba(244, 63, 94, 0.0)', 'OBC Processor')
+    );
+
+    const chart2 = new Chart(
+      document.getElementById('chart-t2').getContext('2d'),
+      createChartConfig('#10b981', 'rgba(16, 185, 129, 0.35)', 'rgba(16, 185, 129, 0.0)', 'Solar Array')
+    );
+
+    const chart3 = new Chart(
+      document.getElementById('chart-t3').getContext('2d'),
+      createChartConfig('#06b6d4', 'rgba(6, 182, 212, 0.35)', 'rgba(6, 182, 212, 0.0)', 'EPS Battery')
+    );
+
+    const chart4 = new Chart(
+      document.getElementById('chart-t4').getContext('2d'),
+      createChartConfig('#f59e0b', 'rgba(245, 158, 11, 0.35)', 'rgba(245, 158, 11, 0.0)', 'Hull Radiator')
+    );
+
+    const charts = [chart1, chart2, chart3, chart4];
+
+    // Append message to mission log
+    function logTelemetry(type, msg, isAlert = false) {
+      const logBox = document.getElementById('telemetry-log');
+      const timeStr = new Date().toISOString().substring(11, 19);
+      const color = isAlert ? 'text-rose-400' : 'text-slate-400';
+      const div = document.createElement('div');
+      div.className = color;
+      div.innerHTML = `<span class="text-slate-600">[${timeStr}]</span> <span class="text-cyan-400 font-semibold">[${type}]</span> ${msg}`;
+      logBox.appendChild(div);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // Clock updater
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('utc-clock').innerText = now.toUTCString().slice(17, 25) + ' UTC';
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Toggle Live vs Sim
+    function toggleDataMode() {
+      simulationMode = !simulationMode;
+      const label = document.getElementById('mode-label');
+      label.innerText = simulationMode ? 'SIMULATED' : 'LIVE';
+      label.className = simulationMode ? 'font-bold text-amber-300' : 'font-bold text-emerald-300';
+      logTelemetry('MODE_CHG', `Switched telemetry downlink source to ${simulationMode ? 'SYNTHETIC ORBIT SIMULATOR' : 'LIVE ESP32 SENSORS'}.`);
+    }
+
+    // Synthetic data generator mimicking realistic space flight fluctuations
+    let simBase = { t1: 38.5, t2: 45.0, t3: 22.4, t4: -5.2, lat: 13.0827, lng: 80.2707, alt: 524.2, spd: 27500.0, sats: 9, hdop: 0.95 };
+    function getSimulatedData() {
+      simBase.t1 += (Math.random() - 0.48) * 0.4;
+      simBase.t2 += (Math.random() - 0.49) * 0.7;
+      simBase.t3 += (Math.random() - 0.50) * 0.2;
+      simBase.t4 += (Math.random() - 0.50) * 0.5;
+      simBase.lat += 0.0005;
+      simBase.lng += 0.0008;
+      return {
+        t1: parseFloat(simBase.t1.toFixed(2)),
+        t2: parseFloat(simBase.t2.toFixed(2)),
+        t3: parseFloat(simBase.t3.toFixed(2)),
+        t4: parseFloat(simBase.t4.toFixed(2)),
+        lat: parseFloat(simBase.lat.toFixed(6)),
+        lng: parseFloat(simBase.lng.toFixed(6)),
+        alt: simBase.alt,
+        spd: simBase.spd,
+        sats: simBase.sats,
+        hdop: simBase.hdop,
+        fix: 1
+      };
+    }
+
+    // Camera controls & fallbacks (ESP32-CAM OV2640 - 15s Downlink Snapshot Sync)
+    const defaultCamImage = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80';
+    let activeCamUrl = '/cam';
+    let camPerformanceMode = 'low'; // 'low' (QVGA 320x240 - fast & low RAM) or 'high' (VGA 640x480 - high res)
+    let lastCamCaptureTime = 0;
+    const CAM_AUTO_INTERVAL_MS = 15000; // 15 seconds interval
+
+    function getNormalizedCamUrl() {
+      let url = activeCamUrl.trim();
+      if (!url) {
+        if (activeEspUrl) {
+          let hostMatch = activeEspUrl.match(/^(?:https?:\/\/)?([^\/:]+)/i);
+          let host = hostMatch ? hostMatch[1] : activeEspUrl;
+          return `http://${host}/cam`;
+        }
+        return '/cam';
+      }
+      if (url.includes('/stream')) {
+        url = url.replace(/\/stream.*$/, '/cam');
+      }
+      if (!url.endsWith('/cam') && !url.endsWith('/capture')) {
+        url = url.endsWith('/') ? url + 'cam' : url + '/cam';
+      }
+      return url;
+    }
+
+    // Toggle Low / High Performance mode directly on ESP32-CAM
+    async function setCamPerformance(mode) {
+      camPerformanceMode = mode;
+      const btnLow = document.getElementById('cam-perf-low');
+      const btnHigh = document.getElementById('cam-perf-high');
+      const resDisplay = document.getElementById('cam-res-display');
+
+      if (mode === 'high') {
+        if (btnHigh) {
+          btnHigh.className = 'px-2 py-1 rounded text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400 transition-all';
+        }
+        if (btnLow) {
+          btnLow.className = 'px-2 py-1 rounded text-xs font-bold text-slate-400 hover:text-slate-200 transition-all';
+        }
+        if (resDisplay) resDisplay.innerText = 'VGA (640x480)';
+      } else {
+        if (btnLow) {
+          btnLow.className = 'px-2 py-1 rounded text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400 transition-all';
+        }
+        if (btnHigh) {
+          btnHigh.className = 'px-2 py-1 rounded text-xs font-bold text-slate-400 hover:text-slate-200 transition-all';
+        }
+        if (resDisplay) resDisplay.innerText = 'QVGA (320x240)';
+      }
+
+      // Notify ESP32-CAM via /cam/set?mode=low|high
+      let baseUrl = getNormalizedCamUrl().replace(/\/cam.*$/, '');
+      if (baseUrl && baseUrl !== '/cam') {
+        try {
+          const controller = new AbortController();
+          const tId = setTimeout(() => controller.abort(), 3000);
+          await fetch(`${baseUrl}/cam/set?mode=${mode}`, { signal: controller.signal });
+          clearTimeout(tId);
+          logTelemetry('CAM_PERF', `Camera resolution set to ${mode.toUpperCase()} mode.`);
+        } catch (e) {
+          // Non-blocking if offline
+        }
+      }
+
+      // Immediately take a fresh shot with new settings
+      captureNewPhoto(true);
+    }
+
+    function applyCamUrl() {
+      const input = document.getElementById('cam-url-input');
+      activeCamUrl = input.value.trim() || '/cam';
+      if (activeCamUrl.includes('/stream')) {
+        activeCamUrl = activeCamUrl.replace(/\/stream.*$/, '/cam');
+        if (input) input.value = activeCamUrl;
+      }
+      logTelemetry('OPTICAL_CFG', `Camera downlink pointing updated to: ${activeCamUrl}`);
+      captureNewPhoto(true);
+    }
+
+    // Explicitly captures a fresh frame from ESP32-CAM
+    function captureNewPhoto(force = false) {
+      const now = Date.now();
+      if (!force && (now - lastCamCaptureTime < CAM_AUTO_INTERVAL_MS - 1500)) {
+        return; // Wait until 15s interval elapses
+      }
+      lastCamCaptureTime = now;
+
+      const camImg = document.getElementById('satellite-camera');
+      const targetUrl = getNormalizedCamUrl();
+      if (!camImg) return;
+
+      const cacheBustUrl = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 't=' + now;
+
+      // Preload test image to avoid blanking
+      const testImg = new Image();
+      testImg.onload = () => {
+        camImg.src = cacheBustUrl;
+        const camBadge = document.getElementById('cam-status-badge');
+        if (camBadge) {
+          camBadge.innerText = '15s CAPTURED';
+          camBadge.className = 'text-[10px] mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-semibold tracking-wider';
+        }
+        logTelemetry('OPTICAL_SYNC', `New 15s optical frame received from ${targetUrl} [${camPerformanceMode.toUpperCase()}]`);
+      };
+      testImg.onerror = () => {
+        handleCamError();
+      };
+      testImg.src = cacheBustUrl;
+    }
+
+    function handleCamError() {
+      const camImg = document.getElementById('satellite-camera');
+      const camBadge = document.getElementById('cam-status-badge');
+      if (camBadge) {
+        camBadge.innerText = 'CAMERA RETRY';
+        camBadge.className = 'text-[10px] mono px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60 font-semibold tracking-wider';
+      }
+      if (camImg && camImg.src !== defaultCamImage) {
+        logTelemetry('OPTICAL_WARN', 'Local /cam endpoint not responding. Displaying cached orbital recon buffer.', true);
+        camImg.src = defaultCamImage;
+      }
+    }
+
+    // Camera HUD live millisecond timecode
+    function updateCamTimestamp() {
+      const now = new Date();
+      const timeStr = now.toISOString().substring(11, 22);
+      const camTs = document.getElementById('cam-timestamp');
+      if (camTs) camTs.innerText = timeStr;
+    }
+    setInterval(updateCamTimestamp, 100);
+
+    // Rate of change calculation (per 6-second interval)
+    function updateRate(id, current, prev) {
+      if (prev === null) return;
+      const diff = (current - prev) / 6.0; // 6s interval
+      const el = document.getElementById(id);
+      const sign = diff >= 0 ? '+' : '';
+      el.innerText = `${sign}${diff.toFixed(2)}°/s`;
+      el.className = Math.abs(diff) > 0.4 ? 'text-amber-400 font-semibold' : 'text-slate-400';
+    }
+
+    // Push new reading to a chart
+    function pushDataToChart(targetChart, timeLabel, value) {
+      if (targetChart.data.labels.length >= MAX_POINTS) {
+        targetChart.data.labels.shift();
+        targetChart.data.datasets[0].data.shift();
+      }
+      targetChart.data.labels.push(timeLabel);
+      targetChart.data.datasets[0].data.push(value);
+      targetChart.update();
+    }
+
+    // -------------------------------------------------------------------------
+    // ESP32 DOWNLINK 10-SECOND POLLING ENGINE
+    // -------------------------------------------------------------------------
+    function getFullEspDataUrl() {
+      let url = activeEspUrl.trim();
+      if (!url) {
+        if (window.location.protocol.startsWith('http')) {
+          return '/data';
+        }
+        return '';
+      }
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url.endsWith('/data') ? url : (url.endsWith('/') ? url + 'data' : url + '/data');
+      }
+      if (url.startsWith('/')) {
+        return url;
+      }
+      // If user provided raw IP like "192.168.1.184"
+      return `http://${url}/data`;
+    }
+
+    function applyEspUrl() {
+      const input = document.getElementById('esp-url-input');
+      if (!input) return;
+      activeEspUrl = input.value.trim();
+      localStorage.setItem('esp32_url', activeEspUrl);
+      logTelemetry('CONFIG_UPD', `ESP32-CAM Target URL configured to: ${getFullEspDataUrl()}`);
+
+      // Auto-point camera feed to ESP32-CAM host
+      let hostMatch = activeEspUrl.match(/^(?:https?:\/\/)?([^\/:]+)/i);
+      let host = hostMatch ? hostMatch[1] : activeEspUrl;
+      if (host && !host.startsWith('/')) {
+        const camInput = document.getElementById('cam-url-input');
+        activeCamUrl = `http://${host}/cam`;
+        if (camInput) camInput.value = activeCamUrl;
+        captureNewPhoto();
+        logTelemetry('CAM_AUTO', `Camera feed automatically linked to ${activeCamUrl}`);
+      }
+
+      pollNow();
+    }
+
+    function updateCountdownUI() {
+      const badge = document.getElementById('countdown-badge');
+      const progress = document.getElementById('countdown-progress');
+      if (badge) {
+        badge.innerText = isFetching ? 'SYNC...' : `${countdownSeconds}s`;
+        badge.className = isFetching ? 'text-amber-300 font-bold w-12 text-center animate-pulse' : 'text-cyan-400 font-bold w-12 text-center';
+      }
+      if (progress) {
+        const pct = Math.max(0, Math.min(100, (countdownSeconds / POLL_INTERVAL) * 100));
+        progress.style.width = `${pct}%`;
+      }
+    }
+
+    function pollNow() {
+      countdownSeconds = POLL_INTERVAL;
+      updateCountdownUI();
+      fetchData();
+    }
+
+    function parseTemp(val) {
+      if (val === null || val === undefined || val === 'null') return null;
+      const num = parseFloat(val);
+      return isNaN(num) ? null : num;
+    }
+
+    function evalSensorStatus(temp, minNominal, maxNominal) {
+      if (temp === null || temp === undefined || isNaN(temp)) {
+        return { text: 'NO DATA', class: 'text-[11px] font-mono text-amber-400 font-bold' };
+      }
+      if (temp < minNominal || temp > maxNominal) {
+        return { text: 'CRITICAL', class: 'text-[11px] font-mono text-rose-400 font-bold' };
+      }
+      if (temp < minNominal + 5 || temp > maxNominal - 5) {
+        return { text: 'CAUTION', class: 'text-[11px] font-mono text-amber-400 font-medium' };
+      }
+      return { text: 'NOMINAL', class: 'text-[11px] font-mono text-emerald-400 font-medium' };
+    }
+
+    // Main telemetry fetch loop (Runs every 5 seconds)
+    async function fetchData() {
+      if (isFetching) return;
+      isFetching = true;
+      updateCountdownUI();
+
+      const connIndicator = document.getElementById('conn-indicator');
+      const connText = document.getElementById('conn-text');
+      let data = null;
+
+      if (!simulationMode) {
+        const targetUrl = getFullEspDataUrl();
+        if (!targetUrl) {
+          isFetching = false;
+          countdownSeconds = POLL_INTERVAL;
+          updateCountdownUI();
+          if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 status-pulse';
+          if (connText) {
+            connText.className = 'text-amber-400 font-medium';
+            connText.innerText = 'NO IP SET';
+          }
+          logTelemetry('LINK_WAIT', 'Waiting for ESP32 IP address. Enter IP in the box above and click CONNECT.', true);
+          return;
+        }
+
+        try {
+          const startTime = performance.now();
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
+
+          const response = await fetch(targetUrl, {
+            method: 'GET',
+            cache: 'no-store',
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          let jsonBody = null;
+          try {
+            jsonBody = await response.json();
+          } catch (jsonErr) {}
+
+          if (!response.ok && !jsonBody) {
+            throw new Error(`HTTP ${response.status} ${response.statusText}`);
+          }
+
+          data = jsonBody || {};
+          const roundTripMs = Math.round(performance.now() - startTime);
+
+          failCount = 0;
+
+          // Process connection state from gateway
+          if (data.link === 'ok') {
+            if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 glow-badge status-pulse';
+            if (connText) {
+              connText.className = 'text-emerald-400 font-medium';
+              connText.innerText = `LINK ACTIVE (${roundTripMs}ms)`;
+            }
+          } else if (data.link === 'waiting_arduino') {
+            if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 status-pulse';
+            if (connText) {
+              connText.className = 'text-amber-300 font-medium';
+              connText.innerText = `WAITING ARDUINO (${data.rx_bytes > 0 ? data.rx_bytes + 'B' : 'NO RX'})`;
+            }
+            if (data.msg) logTelemetry('LINK_WAIT', data.msg);
+          } else if (data.link === 'stale') {
+            const ageSec = Math.round((data.age_ms || 0) / 1000);
+            if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 status-pulse';
+            if (connText) {
+              connText.className = 'text-amber-400 font-medium';
+              connText.innerText = `LINK STALE (${ageSec}s AGO)`;
+            }
+            logTelemetry('LINK_WARN', `Telemetry is stale (${ageSec}s since last packet from Uno).`, true);
+          } else if (data.link === 'lost') {
+            if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 status-pulse';
+            if (connText) {
+              connText.className = 'text-rose-400 font-medium';
+              connText.innerText = 'LINK LOST';
+            }
+          } else {
+            if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 glow-badge status-pulse';
+            if (connText) {
+              connText.className = 'text-emerald-400 font-medium';
+              connText.innerText = `LINK ACTIVE (${roundTripMs}ms)`;
+            }
+          }
+
+          applyTelemetryData(data, roundTripMs);
+
+        } catch (err) {
+          failCount++;
+          const reason = err.name === 'AbortError' ? 'Connection timed out (6s)' : err.message;
+          logTelemetry('NET_ERR', `Cannot reach ESP32 at ${targetUrl}: ${reason}. Retrying in 5s...`, true);
+
+          if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 status-pulse';
+          if (connText) {
+            connText.className = 'text-rose-400 font-medium';
+            connText.innerText = `LINK OFFLINE (#${failCount})`;
+          }
+        }
+      } else {
+        data = getSimulatedData();
+        data.link = 'ok';
+        if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-cyan-400 status-pulse';
+        if (connText) {
+          connText.className = 'text-cyan-400 font-medium';
+          connText.innerText = 'SIM ACTIVE';
+        }
+        applyTelemetryData(data, 0);
+      }
+
+      isFetching = false;
+      countdownSeconds = POLL_INTERVAL;
+      updateCountdownUI();
+    }
+
+    // Apply received telemetry to UI, charts, and 3D heat slab
+    function applyTelemetryData(data, latencyMs) {
+      // Normalize values from ESP32 JSON safely
+      const t1 = parseTemp(data.t1 ?? data.temp1 ?? data.T1);
+      const t2 = parseTemp(data.t2 ?? data.temp2 ?? data.T2);
+      const t3 = parseTemp(data.t3 ?? data.temp3 ?? data.T3);
+      const t4 = parseTemp(data.t4 ?? data.temp4 ?? data.T4);
+      const cleanData = { t1, t2, t3, t4 };
+
+      const now = new Date();
+      const timeStr = now.toTimeString().substring(0, 8);
+      packetCount++;
+      const pktEl = document.getElementById('pkt-count');
+      if (pktEl) pktEl.innerText = data.seq !== undefined ? `#${data.seq} (${packetCount})` : packetCount;
+
+      // Update telemetry numerical readouts
+      const elValT1 = document.getElementById('val-t1');
+      if (elValT1) elValT1.innerText = (cleanData.t1 !== null) ? `${cleanData.t1.toFixed(1)}°C` : '--.-°C';
+      const elValT2 = document.getElementById('val-t2');
+      if (elValT2) elValT2.innerText = (cleanData.t2 !== null) ? `${cleanData.t2.toFixed(1)}°C` : '--.-°C';
+      const elValT3 = document.getElementById('val-t3');
+      if (elValT3) elValT3.innerText = (cleanData.t3 !== null) ? `${cleanData.t3.toFixed(1)}°C` : '--.-°C';
+      const elValT4 = document.getElementById('val-t4');
+      if (elValT4) elValT4.innerText = (cleanData.t4 !== null) ? `${cleanData.t4.toFixed(1)}°C` : '--.-°C';
+
+      // Update individual 4x DHT22 humidities
+      const h1 = parseFloat(data.h1 ?? data.hum ?? 0);
+      const h2 = parseFloat(data.h2 ?? data.hum ?? 0);
+      const h3 = parseFloat(data.h3 ?? data.hum ?? 0);
+      const h4 = parseFloat(data.h4 ?? data.hum ?? 0);
+
+      const elH1 = document.getElementById('hum-t1');
+      if (elH1) elH1.innerText = h1 > 0 ? `RH: ${h1.toFixed(1)}%` : 'RH: --%';
+      const elH2 = document.getElementById('hum-t2');
+      if (elH2) elH2.innerText = h2 > 0 ? `RH: ${h2.toFixed(1)}%` : 'RH: --%';
+      const elH3 = document.getElementById('hum-t3');
+      if (elH3) elH3.innerText = h3 > 0 ? `RH: ${h3.toFixed(1)}%` : 'RH: --%';
+      const elH4 = document.getElementById('hum-t4');
+      if (elH4) elH4.innerText = h4 > 0 ? `RH: ${h4.toFixed(1)}%` : 'RH: --%';
+
+      // Update composite cabin RH
+      if (data.hum !== undefined && data.hum !== null) {
+        const humVal = parseFloat(data.hum);
+        const humEl = document.getElementById('hum-val');
+        if (humEl) humEl.innerText = `${humVal.toFixed(1)}% (DHT22 avg)`;
+      }
+
+      // Update Data Integrity & Reliability Stats (CRC Errors, Packet Loss, RSSI)
+      if (data.crc_err !== undefined) {
+        const elCrc = document.getElementById('crc-err-count');
+        if (elCrc) {
+          elCrc.innerText = data.crc_err;
+          elCrc.className = data.crc_err > 0 ? 'text-rose-400 font-semibold' : 'text-emerald-400 font-semibold';
+        }
+      }
+      if (data.lost !== undefined) {
+        const elLost = document.getElementById('pkt-lost-count');
+        if (elLost) {
+          elLost.innerText = data.lost;
+          elLost.className = data.lost > 0 ? 'text-amber-400 font-semibold' : 'text-emerald-400 font-semibold';
+        }
+      }
+      if (data.rssi !== undefined) {
+        const elRssi = document.getElementById('link-rssi');
+        if (elRssi) elRssi.innerText = `${data.rssi} dBm`;
+      }
+
+      // Update camera status indicator
+      const camStatusEl = document.getElementById('cam-status-badge');
+      if (camStatusEl && data.camera) {
+        camStatusEl.innerText = data.camera === 'online' ? 'OV2640 ONLINE' : 'OV2640 OFFLINE';
+        camStatusEl.className = data.camera === 'online'
+          ? 'text-[10px] mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-semibold tracking-wider'
+          : 'text-[10px] mono px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-semibold tracking-wider';
+      }
+
+      // Update Subsystem nominal/critical statuses
+      const s1 = evalSensorStatus(cleanData.t1, -20, 85);
+      const s2 = evalSensorStatus(cleanData.t2, -40, 110);
+      const s3 = evalSensorStatus(cleanData.t3, 0, 45);
+      const s4 = evalSensorStatus(cleanData.t4, -60, 70);
+
+      const elS1 = document.getElementById('stat-t1');
+      if (elS1) { elS1.innerText = s1.text; elS1.className = s1.class; }
+      const elS2 = document.getElementById('stat-t2');
+      if (elS2) { elS2.innerText = s2.text; elS2.className = s2.class; }
+      const elS3 = document.getElementById('stat-t3');
+      if (elS3) { elS3.innerText = s3.text; elS3.className = s3.class; }
+      const elS4 = document.getElementById('stat-t4');
+      if (elS4) { elS4.innerText = s4.text; elS4.className = s4.class; }
+
+      // Update rate of change (over 5s period)
+      if (cleanData.t1 !== null) updateRate('rate-t1', cleanData.t1, prevValues.t1);
+      if (cleanData.t2 !== null) updateRate('rate-t2', cleanData.t2, prevValues.t2);
+      if (cleanData.t3 !== null) updateRate('rate-t3', cleanData.t3, prevValues.t3);
+      if (cleanData.t4 !== null) updateRate('rate-t4', cleanData.t4, prevValues.t4);
+
+      // Temperature drift calculation
+      if (prevValues.t1 !== null && cleanData.t1 !== null && cleanData.t2 !== null && cleanData.t3 !== null && cleanData.t4 !== null) {
+        const drift = ((cleanData.t1 - prevValues.t1) + (cleanData.t2 - prevValues.t2) + (cleanData.t3 - prevValues.t3) + (cleanData.t4 - prevValues.t4)) / 4.0;
+        const driftEl = document.getElementById('drift-val');
+        if (driftEl) {
+          const sign = drift >= 0 ? '+' : '';
+          driftEl.innerText = `${sign}${drift.toFixed(2)}°C / 5s`;
+          driftEl.className = Math.abs(drift) > 0.5 ? 'text-amber-400 font-semibold' : 'text-cyan-300 font-semibold';
+        }
+      }
+
+      prevValues = { ...cleanData };
+
+      // Push into 4 individual distinct charts if valid
+      if (cleanData.t1 !== null) pushDataToChart(chart1, timeStr, cleanData.t1);
+      if (cleanData.t2 !== null) pushDataToChart(chart2, timeStr, cleanData.t2);
+      if (cleanData.t3 !== null) pushDataToChart(chart3, timeStr, cleanData.t3);
+      if (cleanData.t4 !== null) pushDataToChart(chart4, timeStr, cleanData.t4);
+
+      // Update 3D rotating slab heatmap & telemetry summary
+      updateHeatmapSlab(cleanData);
+
+      // Update last sync time
+      const syncEl = document.getElementById('last-sync-time');
+      if (syncEl) syncEl.innerText = timeStr;
+
+      // Synchronize optical image downlink (every 15 seconds interval)
+      if (!simulationMode) {
+        captureNewPhoto(false);
+      }
+
+      // Update GPS Navigation & Leaflet Map Display (NEO-6M V2)
+      updateGpsUI(data);
+
+      // Log telemetry packet received
+      const latencyMsg = latencyMs > 0 ? ` (${latencyMs}ms)` : '';
+      const gpsLogStr = (data.lat !== undefined && data.lng !== undefined && (parseFloat(data.lat) !== 0 || parseFloat(data.lng) !== 0))
+        ? ` | GPS=${parseFloat(data.lat).toFixed(4)}°,${parseFloat(data.lng).toFixed(4)}° (${data.sats ?? 0}sats)` : '';
+      const t1Str = cleanData.t1 !== null ? `${cleanData.t1.toFixed(1)}°C` : 'N/A';
+      const t2Str = cleanData.t2 !== null ? `${cleanData.t2.toFixed(1)}°C` : 'N/A';
+      const t3Str = cleanData.t3 !== null ? `${cleanData.t3.toFixed(1)}°C` : 'N/A';
+      const t4Str = cleanData.t4 !== null ? `${cleanData.t4.toFixed(1)}°C` : 'N/A';
+      logTelemetry('DOWNLINK_5S', `T1=${t1Str} | T2=${t2Str} | T3=${t3Str} | T4=${t4Str}${gpsLogStr} (Packet #${packetCount}${latencyMsg})`);
+    }
+
+    // -------------------------------------------------------------------------
+    // GPS NAVIGATION & REAL-TIME LEAFLET MAP TRACKING ENGINE
+    // -------------------------------------------------------------------------
+    function updateGpsUI(data) {
+      const latVal = parseFloat(data.lat ?? data.latitude ?? 0);
+      const lngVal = parseFloat(data.lng ?? data.longitude ?? 0);
+      const altVal = parseFloat(data.alt ?? data.altitude ?? 0);
+      const spdVal = parseFloat(data.spd ?? data.speed ?? 0);
+      const satsVal = parseInt(data.sats ?? data.satellites ?? 0);
+      const hdopVal = parseFloat(data.hdop ?? 99.9);
+      const fixVal = parseInt(data.fix ?? (latVal !== 0 && lngVal !== 0 ? 1 : 0));
+
+      gpsData = { lat: latVal, lng: lngVal, alt: altVal, spd: spdVal, sats: satsVal, hdop: hdopVal, fix: fixVal };
+
+      const elLat = document.getElementById('gps-lat');
+      const elLng = document.getElementById('gps-lng');
+      const elAlt = document.getElementById('gps-alt');
+      const elSpd = document.getElementById('gps-spd');
+      const elSats = document.getElementById('gps-sats');
+      const elHdop = document.getElementById('gps-hdop');
+      const elHdopQ = document.getElementById('gps-hdop-quality');
+      const elBadge = document.getElementById('gps-status-badge');
+      const elMicroFix = document.getElementById('gps-micro-fix');
+      const elMicroSats = document.getElementById('gps-micro-sats');
+      const elMicroCoord = document.getElementById('gps-micro-coord');
+      const mapCoordDisp = document.getElementById('map-coord-display');
+      const gmapsBtn = document.getElementById('google-maps-btn');
+
+      if (elSats) elSats.innerText = `${satsVal} SATS`;
+      if (elMicroSats) elMicroSats.innerText = `${satsVal} SATS`;
+      if (elAlt) elAlt.innerText = altVal > 0 ? `${altVal.toFixed(1)} m` : '--.- m';
+      if (elSpd) elSpd.innerText = `${spdVal.toFixed(1)} km/h`;
+      if (elHdop) elHdop.innerText = hdopVal < 90 ? hdopVal.toFixed(2) : '--.--';
+
+      if (elHdopQ) {
+        if (hdopVal < 1.5) { elHdopQ.innerText = 'EXCELLENT FIX'; elHdopQ.className = 'text-[10px] text-emerald-400 font-semibold'; }
+        else if (hdopVal < 3.0) { elHdopQ.innerText = 'GOOD FIX'; elHdopQ.className = 'text-[10px] text-cyan-300'; }
+        else if (hdopVal < 6.0) { elHdopQ.innerText = 'MODERATE'; elHdopQ.className = 'text-[10px] text-amber-300'; }
+        else { elHdopQ.innerText = 'POOR GEOMETRY'; elHdopQ.className = 'text-[10px] text-rose-400'; }
+      }
+
+      if (fixVal === 1 && (latVal !== 0 || lngVal !== 0)) {
+        if (elLat) elLat.innerText = `${latVal.toFixed(6)}°`;
+        if (elLng) elLng.innerText = `${lngVal.toFixed(6)}°`;
+        if (elBadge) {
+          elBadge.innerText = `3D GPS FIX ACTIVE (${satsVal} SATS)`;
+          elBadge.className = 'px-2.5 py-1 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-semibold tracking-wider';
+        }
+        if (elMicroFix) {
+          elMicroFix.innerText = `3D FIX (${satsVal} SATS)`;
+          elMicroFix.className = 'text-emerald-400 font-semibold';
+        }
+        if (elMicroCoord) {
+          elMicroCoord.innerText = `${latVal.toFixed(3)}°, ${lngVal.toFixed(3)}°`;
+        }
+        if (mapCoordDisp) {
+          mapCoordDisp.innerText = `LAT ${latVal.toFixed(6)}° // LNG ${lngVal.toFixed(6)}° (ALT: ${altVal.toFixed(0)}m)`;
+        }
+
+        if (gmapsBtn) {
+          gmapsBtn.href = `https://www.google.com/maps?q=${latVal},${lngVal}&z=16`;
+        }
+
+        // Update Leaflet Map Marker & Ground Track
+        if (leafletMap) {
+          const latLng = [latVal, lngVal];
+          if (gpsMarker) {
+            gpsMarker.setLatLng(latLng);
+            gpsMarker.setPopupContent(`
+              <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#e2e8f0; line-height:1.4;">
+                <b style="color:#06b6d4;">🛰️ MINISATELLITE BUS</b><br>
+                <b>LAT:</b> ${latVal.toFixed(6)}°<br>
+                <b>LNG:</b> ${lngVal.toFixed(6)}°<br>
+                <b>ALT:</b> ${altVal.toFixed(1)} m | <b>SPD:</b> ${spdVal.toFixed(1)} km/h<br>
+                <b>SATS:</b> ${satsVal} | <b>HDOP:</b> ${hdopVal.toFixed(2)}
+              </div>
+            `);
+          }
+
+          gpsTrackPoints.push(latLng);
+          if (gpsTrackPoints.length > 50) gpsTrackPoints.shift();
+          if (gpsTrackPolyline) gpsTrackPolyline.setLatLngs(gpsTrackPoints);
+
+          // Smoothly pan map to track satellite
+          leafletMap.panTo(latLng, { animate: true, duration: 1.0 });
+        }
+      } else {
+        if (elBadge) {
+          elBadge.innerText = satsVal > 0 ? `SEARCHING FIX (${satsVal} SATS)` : 'ACQUIRING SATELLITES...';
+          elBadge.className = 'px-2.5 py-1 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60 font-semibold tracking-wider';
+        }
+        if (elMicroFix) {
+          elMicroFix.innerText = satsVal > 0 ? `SEARCHING (${satsVal} SATS)` : 'SEARCHING SATS';
+          elMicroFix.className = 'text-amber-400 font-semibold';
+        }
+        if (mapCoordDisp) {
+          mapCoordDisp.innerText = satsVal > 0 ? `ACQUIRING FIX (${satsVal} SATELLITES IN VIEW)...` : 'SEARCHING SATELLITES...';
+        }
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 3D ROTATING SLAB & 4-SENSOR HEATMAP ENGINE (Blue -> Orange -> Red)
+    // -------------------------------------------------------------------------
+    let slabAngle = 35;
+    let slabRotating = true;
+    const slabEl = document.getElementById('thermal-slab');
+    const angleReadout = document.getElementById('slab-angle-readout');
+
+    function animateSlab() {
+      if (slabRotating && slabEl) {
+        slabAngle = (slabAngle + 0.6) % 360;
+        slabEl.style.transform = `rotateX(58deg) rotateZ(${slabAngle.toFixed(1)}deg)`;
+        if (angleReadout) angleReadout.innerText = Math.round(slabAngle) + '°';
+      }
+      requestAnimationFrame(animateSlab);
+    }
+    requestAnimationFrame(animateSlab);
+
+    function toggleSlabRotation() {
+      slabRotating = !slabRotating;
+      const rotLabel = document.getElementById('rot-state');
+      rotLabel.innerText = slabRotating ? 'ON' : 'PAUSED';
+      rotLabel.className = slabRotating ? 'font-bold text-emerald-400' : 'font-bold text-amber-400';
+    }
+
+    function resetSlabAngle() {
+      slabAngle = 0;
+      if (slabEl) slabEl.style.transform = `rotateX(58deg) rotateZ(0deg)`;
+      if (angleReadout) angleReadout.innerText = '0°';
+    }
+
+    // Map temperature to color: Blue (cold) -> Orange (warm) -> Red (hot)
+    function tempToRGB(temp) {
+      if (temp === null || temp === undefined || isNaN(temp)) {
+        return { r: 71, g: 85, b: 105, css: 'rgb(71, 85, 105)' }; // Slate-600 neutral for disconnected sensor
+      }
+      // Clamped range: 0°C (Deep Blue) to 60°C (Bright Red)
+      const minT = 0;
+      const midT = 30; // Orange transition
+      const maxT = 60;
+
+      let r = 0, g = 0, b = 0;
+
+      if (temp <= midT) {
+        // Range 0 to 30: Pure Blue (37, 99, 235) -> Vibrant Orange (249, 115, 22)
+        const t = Math.max(0, Math.min(1, (temp - minT) / (midT - minT)));
+        r = Math.round(37 + (249 - 37) * t);
+        g = Math.round(99 + (115 - 99) * t);
+        b = Math.round(235 + (22 - 235) * t);
+      } else {
+        // Range 30 to 60+: Orange (249, 115, 22) -> Fiery Red (239, 68, 68)
+        const t = Math.max(0, Math.min(1, (temp - midT) / (maxT - midT)));
+        r = Math.round(249 + (239 - 249) * t);
+        g = Math.round(115 + (68 - 115) * t);
+        b = Math.round(22 + (68 - 22) * t);
+      }
+      return { r, g, b, css: `rgb(${r}, ${g}, ${b})` };
+    }
+
+    // Render continuous 2D thermal dissipation gradient across the 15x15cm plate
+    function updateHeatmapSlab(data) {
+      const canvas = document.getElementById('heatmap-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Extract colors for each quadrant (falls back to slate if null)
+      const c1 = tempToRGB(data.t1); // Top-Left (OBC Core)
+      const c2 = tempToRGB(data.t2); // Top-Right (Solar Array)
+      const c3 = tempToRGB(data.t3); // Bottom-Left (EPS Battery)
+      const c4 = tempToRGB(data.t4); // Bottom-Right (Radiator)
+
+      // Clear
+      ctx.clearRect(0, 0, w, h);
+
+      // Radial heat diffusion circles for each sensor corner
+      const radius = w * 0.75;
+
+      // Top-Left (T1)
+      let g1 = ctx.createRadialGradient(0, 0, 5, 0, 0, radius);
+      g1.addColorStop(0, `rgba(${c1.r}, ${c1.g}, ${c1.b}, 1)`);
+      g1.addColorStop(1, `rgba(${c1.r}, ${c1.g}, ${c1.b}, 0)`);
+      ctx.fillStyle = g1;
+      ctx.fillRect(0, 0, w, h);
+
+      // Top-Right (T2)
+      ctx.globalCompositeOperation = 'screen';
+      let g2 = ctx.createRadialGradient(w, 0, 5, w, 0, radius);
+      g2.addColorStop(0, `rgba(${c2.r}, ${c2.g}, ${c2.b}, 1)`);
+      g2.addColorStop(1, `rgba(${c2.r}, ${c2.g}, ${c2.b}, 0)`);
+      ctx.fillStyle = g2;
+      ctx.fillRect(0, 0, w, h);
+
+      // Bottom-Left (T3)
+      let g3 = ctx.createRadialGradient(0, h, 5, 0, h, radius);
+      g3.addColorStop(0, `rgba(${c3.r}, ${c3.g}, ${c3.b}, 1)`);
+      g3.addColorStop(1, `rgba(${c3.r}, ${c3.g}, ${c3.b}, 0)`);
+      ctx.fillStyle = g3;
+      ctx.fillRect(0, 0, w, h);
+
+      // Bottom-Right (T4)
+      let g4 = ctx.createRadialGradient(w, h, 5, w, h, radius);
+      g4.addColorStop(0, `rgba(${c4.r}, ${c4.g}, ${c4.b}, 1)`);
+      g4.addColorStop(1, `rgba(${c4.r}, ${c4.g}, ${c4.b}, 0)`);
+      ctx.fillStyle = g4;
+      ctx.fillRect(0, 0, w, h);
+
+      // Reset blending
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Subtle metallic aluminum bus cross-grid lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h);
+      ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2);
+      ctx.stroke();
+
+      // Outer bezel border
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, w - 2, h - 2);
+
+      // Update plate inspector widgets safely
+      document.getElementById('plate-val-t1').innerText = (data.t1 !== null) ? `${data.t1.toFixed(1)}°C` : '--.-°C';
+      document.getElementById('plate-color-t1').style.backgroundColor = c1.css;
+
+      document.getElementById('plate-val-t2').innerText = (data.t2 !== null) ? `${data.t2.toFixed(1)}°C` : '--.-°C';
+      document.getElementById('plate-color-t2').style.backgroundColor = c2.css;
+
+      document.getElementById('plate-val-t3').innerText = (data.t3 !== null) ? `${data.t3.toFixed(1)}°C` : '--.-°C';
+      document.getElementById('plate-color-t3').style.backgroundColor = c3.css;
+
+      document.getElementById('plate-val-t4').innerText = (data.t4 !== null) ? `${data.t4.toFixed(1)}°C` : '--.-°C';
+      document.getElementById('plate-color-t4').style.backgroundColor = c4.css;
+
+      // Calculate thermal delta & average filtering out disconnected sensors
+      const validVals = [data.t1, data.t2, data.t3, data.t4].filter(v => v !== null && !isNaN(v));
+      if (validVals.length > 0) {
+        const maxVal = Math.max(...validVals);
+        const minVal = Math.min(...validVals);
+        const avg = validVals.reduce((a, b) => a + b, 0) / validVals.length;
+        document.getElementById('thermal-delta').innerText = (maxVal - minVal).toFixed(1) + '°C ΔT';
+        document.getElementById('thermal-avg').innerText = avg.toFixed(1) + '°C';
+      } else {
+        document.getElementById('thermal-delta').innerText = '--.-°C ΔT';
+        document.getElementById('thermal-avg').innerText = '--.-°C';
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // INITIALIZATION: RESTORE CONNECTION & START 10-SECOND CYCLE
+    // -------------------------------------------------------------------------
+    function initEspConnection() {
+      const input = document.getElementById('esp-url-input');
+      const savedUrl = localStorage.getItem('esp32_url');
+
+      if (savedUrl) {
+        activeEspUrl = savedUrl;
+        if (input) input.value = savedUrl;
+      } else if (window.location.protocol.startsWith('http')) {
+        // If served directly by ESP32 web server
+        activeEspUrl = '/data';
+        if (input) input.value = '/data';
+      } else {
+        // Local file mode (e.g. file:///C:/...)
+        activeEspUrl = '';
+        if (input) input.placeholder = 'e.g. 192.168.1.184 or /data';
+        logTelemetry('INIT_INFO', 'Ground terminal ready. Enter your ESP32 IP address above and click CONNECT.');
+      }
+
+      // Initialize Leaflet GPS Interactive Map
+      initGpsMap();
+
+      // Initial telemetry fetch
+      pollNow();
+
+      // Start 1-second countdown and 6-second polling interval
+      startPollingLoop();
+    }
+
+    function startPollingLoop() {
+      if (pollIntervalTimer) clearInterval(pollIntervalTimer);
+      if (countdownIntervalTimer) clearInterval(countdownIntervalTimer);
+
+      countdownSeconds = POLL_INTERVAL;
+      updateCountdownUI();
+
+      // Countdown ticker every 1 second
+      countdownIntervalTimer = setInterval(() => {
+        if (!isFetching) {
+          countdownSeconds--;
+          if (countdownSeconds < 0) {
+            countdownSeconds = POLL_INTERVAL;
+          }
+          updateCountdownUI();
+        }
+      }, 1000);
+
+      // Downlink query every 6 seconds (6,000 ms)
+      pollIntervalTimer = setInterval(() => {
+        fetchData();
+      }, POLL_INTERVAL * 1000);
+
+      // Dedicated Camera Field Update Loop every 15 seconds (15,000 ms)
+      setInterval(() => {
+        if (!simulationMode) {
+          captureNewPhoto(false);
+        }
+      }, CAM_AUTO_INTERVAL_MS);
+
+      // Dedicated Host IP Field & Address Check Loop every 3 seconds (3,000 ms)
+      setInterval(() => {
+        checkAndSyncIpAddress();
+      }, 3000);
+    }
+
+    // IP Address Synchronization & Status Check (every 3 seconds)
+    function checkAndSyncIpAddress() {
+      const input = document.getElementById('esp-url-input');
+      const savedUrl = localStorage.getItem('esp32_url') || '';
+
+      // Keep input populated if empty and saved URL exists
+      if (input && !input.value.trim() && savedUrl) {
+        input.value = savedUrl;
+        activeEspUrl = savedUrl;
+      }
+
+      // Auto-detect change in IP input field
+      if (input && input.value.trim() && input.value.trim() !== activeEspUrl) {
+        applyEspUrl();
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // WEB SERIAL API: DIRECT ARDUINO UNO USB TELEMETRY LINK
+    // -------------------------------------------------------------------------
+    let serialPort = null;
+    let serialReader = null;
+    let isSerialConnected = false;
+    let serialBuffer = '';
+
+    async function toggleWebSerial() {
+      if (!('serial' in navigator)) {
+        alert('Web Serial API is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Opera to connect directly to Arduino Uno via USB.');
+        return;
+      }
+
+      const serialBtn = document.getElementById('usb-serial-btn');
+      const serialStatus = document.getElementById('usb-serial-status');
+
+      if (isSerialConnected) {
+        // Disconnect
+        try {
+          if (serialReader) await serialReader.cancel();
+          if (serialPort) await serialPort.close();
+        } catch (e) {
+          console.warn('Error closing serial port:', e);
+        }
+        isSerialConnected = false;
+        serialPort = null;
+        serialReader = null;
+        if (serialBtn) {
+          serialBtn.className = 'px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all shadow-md shadow-indigo-950 flex items-center space-x-1.5';
+          serialBtn.innerHTML = `
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span>CONNECT ARDUINO (USB)</span>
+          `;
+        }
+        if (serialStatus) {
+          serialStatus.innerText = 'DISCONNECTED';
+          serialStatus.className = 'text-slate-500';
+        }
+        logTelemetry('USB_LINK', 'Arduino Uno USB Serial port disconnected.');
+        return;
+      }
+
+      try {
+        serialPort = await navigator.serial.requestPort();
+        await serialPort.open({ baudRate: 9600 });
+        isSerialConnected = true;
+
+        if (serialBtn) {
+          serialBtn.className = 'px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold transition-all shadow-md shadow-rose-950 flex items-center space-x-1.5';
+          serialBtn.innerHTML = `
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            <span>DISCONNECT USB</span>
+          `;
+        }
+        if (serialStatus) {
+          serialStatus.innerText = '9600 BAUD LIVE';
+          serialStatus.className = 'text-emerald-400 font-bold';
+        }
+
+        const connIndicator = document.getElementById('conn-indicator');
+        const connText = document.getElementById('conn-text');
+        if (connIndicator) connIndicator.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 glow-badge status-pulse';
+        if (connText) {
+          connText.className = 'text-emerald-400 font-medium';
+          connText.innerText = 'USB ARDUINO ACTIVE';
+        }
+
+        logTelemetry('USB_LINK', 'Arduino Uno connected via Web Serial API @ 9600 Baud. Receiving live 4-sensor packets.');
+        readSerialStream();
+      } catch (err) {
+        console.error('Serial connection error:', err);
+        logTelemetry('USB_ERR', `Web Serial connection failed: ${err.message}`, true);
+      }
+    }
+
+    async function readSerialStream() {
+      const textDecoder = new TextDecoderStream();
+      const readableStreamClosed = serialPort.readable.pipeTo(textDecoder.writable);
+      const reader = textDecoder.readable.getReader();
+      serialReader = reader;
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            serialBuffer += value;
+            const lines = serialBuffer.split('\n');
+            serialBuffer = lines.pop(); // Retain incomplete chunk
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('#')) {
+                logTelemetry('UNO_DIAG', trimmed.substring(1).trim());
+              } else if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                  const data = JSON.parse(trimmed);
+                  data.link = 'ok';
+                  applyTelemetryData(data, 1);
+                } catch (parseErr) {
+                  // Incomplete or malformed JSON line
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        if (isSerialConnected) {
+          logTelemetry('USB_WARN', `Serial read stream closed: ${err.message}`);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // WIRING & CONNECTION DIAGRAM MODAL HANDLER
+    // -------------------------------------------------------------------------
+    function toggleWiringModal() {
+      const modal = document.getElementById('wiring-modal');
+      if (!modal) return;
+      if (modal.classList.contains('hidden')) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      } else {
+        modal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+      }
+    }
+
+    function switchWiringTab(tabId) {
+      // Hide all tabs
+      document.querySelectorAll('.wiring-tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.wiring-tab-btn').forEach(el => {
+        el.classList.remove('bg-cyan-500/20', 'text-cyan-300', 'border-cyan-400');
+        el.classList.add('text-slate-400', 'border-transparent');
+      });
+
+      // Show target tab
+      const targetContent = document.getElementById('wiring-tab-' + tabId);
+      const targetBtn = document.getElementById('btn-tab-' + tabId);
+      if (targetContent) targetContent.classList.remove('hidden');
+      if (targetBtn) {
+        targetBtn.classList.add('bg-cyan-500/20', 'text-cyan-300', 'border-cyan-400');
+        targetBtn.classList.remove('text-slate-400', 'border-transparent');
+      }
+    }
+
+    // Close modal on Escape key
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('wiring-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+          toggleWiringModal();
+        }
+      }
+    });
+
+    // Launch connection and telemetry loop
+    initEspConnection();
+  </script>
+
+  <!-- ========================================================================= -->
+  <!-- HARDWARE WIRING & CONNECTION DIAGRAM MODAL DIALOG                         -->
+  <!-- ========================================================================= -->
+  <div id="wiring-modal"
+    class="hidden fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
+    <div
+      class="relative w-full max-w-5xl bg-slate-900 border border-cyan-500/40 rounded-2xl shadow-2xl p-5 md:p-7 overflow-hidden my-auto">
+
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+        <div class="flex items-center space-x-3">
+          <div class="p-2.5 rounded-xl bg-cyan-950 border border-cyan-400/40 text-cyan-400">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span
+                class="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 mono font-semibold">CIRCUIT
+                SCHEMATICS</span>
+              <span class="text-xs text-slate-400 mono">ARDUINO UNO + ESP32 + 4 SENSORS</span>
+            </div>
+            <h2 class="text-lg md:text-xl font-bold text-white tracking-wide">
+              MINISATELLITE HARDWARE CONNECTION DIAGRAM
+            </h2>
+          </div>
+        </div>
+
+        <button onclick="toggleWiringModal()"
+          class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-3 mb-5 text-xs mono">
+        <button id="btn-tab-overview" onclick="switchWiringTab('overview')"
+          class="wiring-tab-btn px-3 py-1.5 rounded-lg border border-cyan-400 bg-cyan-500/20 text-cyan-300 font-bold transition-all">
+          1. SYSTEM ARCHITECTURE
+        </button>
+        <button id="btn-tab-dht22" onclick="switchWiringTab('dht22')"
+          class="wiring-tab-btn px-3 py-1.5 rounded-lg border border-transparent text-slate-400 hover:text-slate-200 transition-all">
+          2. 4x DHT22 SENSORS WIRING
+        </button>
+        <button id="btn-tab-esp32" onclick="switchWiringTab('esp32')"
+          class="wiring-tab-btn px-3 py-1.5 rounded-lg border border-transparent text-slate-400 hover:text-slate-200 transition-all">
+          3. ARDUINO TO ESP32-CAM (UART)
+        </button>
+        <button id="btn-tab-gps" onclick="switchWiringTab('gps')"
+          class="wiring-tab-btn px-3 py-1.5 rounded-lg border border-transparent text-slate-400 hover:text-slate-200 transition-all">
+          4. NEO-6M GPS SENSOR
+        </button>
+      </div>
+
+      <!-- Tab 1: System Overview -->
+      <div id="wiring-tab-overview" class="wiring-tab-content space-y-4">
+        <div
+          class="bg-slate-950 p-4 rounded-xl border border-slate-800 mono text-xs leading-relaxed overflow-x-auto text-cyan-300">
+          <pre class="text-slate-300">
++-----------------------------------------------------------------------------------+
+|               MINISATELLITE 4x DHT22 THERMAL TELEMETRY ARCHITECTURE               |
++-----------------------------------------------------------------------------------+
+
+     [DHT22 #1] (Pin D2) - OBC Processor Core  ----\
+     [DHT22 #2] (Pin D3) - Solar Array Panel   -----\
+     [DHT22 #3] (Pin D4) - EPS Battery Bay     -----> [ ARDUINO UNO ]
+     [DHT22 #4] (Pin D5) - Hull Radiator Plate -----/   (Samples, filters, builds JSON)
+                                                             |
+                   +-----------------------------------------+-------------------------+
+                   |                                                                   |
+      [ PATHWAY 1: WIRELESS RELAY ]                                       [ PATHWAY 2: DIRECT GROUND ]
+                   |                                                                   |
+         Pin 11 TX -> 1kΩ/2kΩ Divider                                             USB Cable (COM port)
+                   v                                                                   v
+          [ ESP32-CAM NODE ]                                                  [ CHROME / EDGE BROWSER ]
+       (U0R / GPIO 3 RX @ 9600 Baud)                                          (Web Serial API in temp.html)
+                   |                                                                   |
+         Wi-Fi 802.11 b/g/n Downlink                                                   |
+                   v                                                                   |
+    +----------------------------------------------------------------------------------+
+    |           GROUND STATION DASHBOARD: temp.html                                    |
+    |  * 4 Subsystem Gauges  * 4 Real-time Graphs  * 3D Thermal Slab  * Camera Feed    |
+    +----------------------------------------------------------------------------------+
+</pre>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+            <span class="text-cyan-400 font-bold block mb-1">WIRELESS VIA ESP32-CAM</span>
+            <p class="text-slate-400">Arduino Uno transmits 4x DHT22 telemetry via Pin 1 (TX) through a 1k/2k level divider to ESP32-CAM GPIO 13 (or GPIO 3).
+              ESP32-CAM serves data over Wi-Fi at <code class="text-emerald-400">/data</code> and live OV2640 camera
+              feed at <code class="text-cyan-400">/cam</code>.</p>
+          </div>
+          <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+            <span class="text-indigo-400 font-bold block mb-1">DIRECT USB GROUND LINK</span>
+            <p class="text-slate-400">Plug Arduino Uno directly into PC via USB. Click <strong>CONNECT ARDUINO
+                (USB)</strong> in this dashboard to receive 4-sensor DHT22 packets directly via Web Serial API.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: 4x DHT22 Digital Sensors -->
+      <div id="wiring-tab-dht22" class="wiring-tab-content hidden space-y-4">
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 mono text-xs overflow-x-auto text-teal-300">
+          <pre class="text-slate-300">
++-----------------------------------------------------------------------------------+
+|               4x DHT22 (AM2302) DIGITAL SENSORS ARDUINO UNO SCHEMATIC             |
++-----------------------------------------------------------------------------------+
+
+                     ARDUINO UNO
+                  +---------------+
+            +5V --+ 5V            |
+            GND --+ GND           |
+                  |               |
+                  |  D2 (T1 OBC)  +--+--- [DHT22 #1 Pin 2 DATA]
+                  |               |  |
+                  |               | [4.7kΩ-10kΩ Pull-Up]
+                  |         +5V --+--+
+                  |               |
+                  |  D3 (T2 Solar)+--+--- [DHT22 #2 Pin 2 DATA]
+                  |               |  |
+                  |               | [4.7kΩ-10kΩ Pull-Up]
+                  |         +5V --+--+
+                  |               |
+                  |  D4 (T3 Batt) +--+--- [DHT22 #3 Pin 2 DATA]
+                  |               |  |
+                  |               | [4.7kΩ-10kΩ Pull-Up]
+                  |         +5V --+--+
+                  |               |
+                  |  D5 (T4 Rad)  +--+--- [DHT22 #4 Pin 2 DATA]
+                  |               |  |
+                  |               | [4.7kΩ-10kΩ Pull-Up]
+                  |         +5V --+--+
+                  +---------------+
+
+    DHT22 PINOUT (Looking at front grill with pins pointing downward):
+    * Pin 1 (Left):  VCC -> Connect to Arduino +5V (or +3.3V)
+    * Pin 2:         DATA -> Connect to Digital Pin (D2 / D3 / D4 / D5)
+                     (If bare 4-pin DHT22, place 4.7kΩ to 10kΩ resistor between Pin 1 and Pin 2)
+                     (If 3-pin breakout module, pull-up resistor is already built-in!)
+    * Pin 3:         NC   -> Leave unconnected (Null)
+    * Pin 4 (Right): GND  -> Connect to Arduino GND
+</pre>
+        </div>
+
+        <table class="w-full text-xs mono text-left border border-slate-800 rounded-xl overflow-hidden">
+          <thead class="bg-slate-950 text-slate-400">
+            <tr>
+              <th class="p-2.5">Subsystem Channel</th>
+              <th class="p-2.5">Sensor Model</th>
+              <th class="p-2.5">Arduino Uno Data Pin</th>
+              <th class="p-2.5">VCC Pin</th>
+              <th class="p-2.5">GND Pin</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800 text-slate-300">
+            <tr>
+              <td class="p-2.5 font-bold text-rose-400">T1 // OBC Core</td>
+              <td class="p-2.5">DHT22 (AM2302) #1</td>
+              <td class="p-2.5 font-bold text-cyan-300">Digital Pin D2</td>
+              <td class="p-2.5 text-rose-400">+5V</td>
+              <td class="p-2.5 text-slate-400">GND</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-emerald-400">T2 // Solar Array</td>
+              <td class="p-2.5">DHT22 (AM2302) #2</td>
+              <td class="p-2.5 font-bold text-cyan-300">Digital Pin D3</td>
+              <td class="p-2.5 text-rose-400">+5V</td>
+              <td class="p-2.5 text-slate-400">GND</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-cyan-400">T3 // EPS Battery</td>
+              <td class="p-2.5">DHT22 (AM2302) #3</td>
+              <td class="p-2.5 font-bold text-cyan-300">Digital Pin D4</td>
+              <td class="p-2.5 text-rose-400">+5V</td>
+              <td class="p-2.5 text-slate-400">GND</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-amber-400">T4 // Hull Radiator</td>
+              <td class="p-2.5">DHT22 (AM2302) #4</td>
+              <td class="p-2.5 font-bold text-cyan-300">Digital Pin D5</td>
+              <td class="p-2.5 text-rose-400">+5V</td>
+              <td class="p-2.5 text-slate-400">GND</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tab 3: ESP32-CAM Interconnect -->
+      <div id="wiring-tab-esp32" class="wiring-tab-content hidden space-y-4">
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 mono text-xs overflow-x-auto text-amber-300">
+          <pre class="text-slate-300">
++-----------------------------------------------------------------------------------+
+|      ARDUINO UNO TO ESP32-CAM SERIAL INTERCONNECT & VOLTAGE LEVEL SHIFTER         |
++-----------------------------------------------------------------------------------+
+
+      ARDUINO UNO (5V Logic)                          ESP32-CAM AI-THINKER (3.3V)
+    +--------------------+                             +--------------------+
+    |                    |                             |                    |
+    |             Pin 1  |----[ 1kΩ Resistor ]----+----| U0R / GPIO 3 (RX)   |
+    |              (TX)  |                        |    |                    |
+    |                    |                 [ 2kΩ Resistor ]                 |
+    |                    |                        |    |                    |
+    |             Pin 0  |<-----------------------+----| U0T / GPIO 1 (TX)   |
+    |              (RX)  |   (Direct 3.3V -> 5V is OK) |                    |
+    |                    |                             |                    |
+    |               GND  |-----------------------------| GND (Pin next to 5V)|
+    |                    |       COMMON GROUND         |                    |
+    |               5V   |-----------------------------| 5V Power Pin       |
+    +--------------------+                             +--------------------+
+
+    CRITICAL LEVEL SHIFTING & WIRING NOTES:
+    * Arduino Uno digital pins output 5V. ESP32-CAM GPIOs are strictly 3.3V rated.
+    * The 1k / 2k voltage divider reduces Arduino TX (5V) down to ~3.33V:
+      Vout = 5.0V * (2k / (1k + 2k)) = 3.33V (Safe for ESP32 input).
+    * PRIMARY PIN (RECOMMENDED): Connect voltage divider output to ESP32-CAM GPIO 13 (IO13).
+      This leaves GPIO 1 and GPIO 3 free for USB flashing and serial monitor without pin contention!
+    * ALTERNATIVE PIN: Connect voltage divider output to ESP32-CAM GPIO 3 (U0R).
+    * COMMON GROUND: Arduino GND and ESP32-CAM GND MUST be connected together!
+    * POWER SUPPLY: ESP32-CAM requires a stable 5V power source supplying at least 1A.
+</pre>
+        </div>
+      </div>
+
+      <!-- Tab 4: NEO-6M V2 GPS Interconnect -->
+      <div id="wiring-tab-gps" class="wiring-tab-content hidden space-y-4">
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 mono text-xs overflow-x-auto text-emerald-300">
+          <pre class="text-slate-300">
++-----------------------------------------------------------------------------------+
+|               NEO-6M V2 GPS MODULE TO ARDUINO UNO CONNECTION SCHEMATIC            |
++-----------------------------------------------------------------------------------+
+
+      ARDUINO UNO (ATmega328P)                        NEO-6M V2 GPS RECEIVER
+    +------------------------+                         +--------------------+
+    |                        |                         |                    |
+    |                 Pin 8  |<------------------------| TX (NMEA 9600 Baud)|
+    |         (AltSoftSerial)|                         |                    |
+    |                 Pin 9  |----[ 1kΩ Resistor ]--+--| RX (Config, Opt)   |
+    |         (AltSoftSerial)|                      |  |                    |
+    |                        |               [ 2kΩ Resistor ]               |
+    |                        |                      |  |                    |
+    |                   GND  |----------------------+--| GND                |
+    |                        |       COMMON GROUND     |                    |
+    |                    5V  |-------------------------| VCC (3.3V - 5V)    |
+    +------------------------+                         +--------------------+
+
+    GPS MODULE INSTRUCTIONS:
+    * VCC: Connect to Arduino Uno +5V (NEO-6M module has an onboard 3.3V LDO regulator).
+    * GND: Connect to Arduino Uno GND.
+    * TX:  Connect to Arduino Pin 8 (AltSoftSerial RX).
+    * RX:  Connect to Arduino Pin 9 via 1kΩ/2kΩ divider (Optional, GPS sends data automatically).
+    * ANTENNA: Place ceramic patch antenna facing the open sky or near a window for initial 3D fix.
+</pre>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div
+        class="mt-6 pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs mono">
+        <div class="text-slate-400">
+          Complete offline guide: <span class="text-cyan-300 font-semibold">minisatellite/CONNECTION_DIAGRAM.md</span>
+        </div>
+        <button onclick="toggleWiringModal()"
+          class="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all shadow-lg shadow-cyan-950">
+          CLOSE TERMINAL
+        </button>
+      </div>
+
+    </div>
+  </div>
+</body>
+
+</html>
